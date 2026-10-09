@@ -132,9 +132,8 @@ namespace DeskTodo
             focus.EndedAt = now.ToString("o", CultureInfo.InvariantCulture); focus.Completed = completed;
             state.FocusHistory.Add(focus); state.ActiveFocus = null;
         }
-        public static double SecondsOn(FocusSession focus, DateTime day)
+        static IEnumerable<KeyValuePair<DateTime, double>> Parts(FocusSession focus)
         {
-            double total = 0;
             foreach (var slice in focus.Slices)
             {
                 var start = DateTimeOffset.ParseExact(slice.StartedAt, "o", CultureInfo.InvariantCulture);
@@ -142,13 +141,42 @@ namespace DeskTodo
                 while (remaining > 0)
                 {
                     double chunk = Math.Min(remaining, 86400 - start.TimeOfDay.TotalSeconds);
-                    if (start.Date == day.Date) total += chunk;
+                    yield return new KeyValuePair<DateTime, double>(start.Date, chunk);
                     remaining -= chunk; if (remaining <= 0) break; start = new DateTimeOffset(start.Date.AddDays(1), start.Offset);
                 }
             }
-            return total;
+        }
+        public static double SecondsOn(FocusSession focus, DateTime day) { return Parts(focus).Where(p => p.Key == day.Date).Sum(p => p.Value); }
+        public static StudyReport Summarize(IEnumerable<FocusSession> sessions, DateTime from, DateTime through)
+        {
+            from = from.Date; through = through.Date;
+            if (through < from || (through - from).TotalDays > 365) throw new ArgumentException("请选择不超过 366 天的有效统计日期范围。");
+            var report = new StudyReport();
+            int days = (int)(through - from).TotalDays + 1;
+            for (int index = 0; index < days; index++) report.SecondsByDay.Add(Dates.Key(from.AddDays(index)), 0);
+            foreach (var session in sessions)
+            {
+                double seconds = 0;
+                foreach (var part in Parts(session))
+                    if (part.Key >= from && part.Key <= through) { report.SecondsByDay[Dates.Key(part.Key)] += part.Value; seconds += part.Value; }
+                if (seconds > 0) { if (!report.SecondsByTitle.ContainsKey(session.Title)) report.SecondsByTitle.Add(session.Title, 0); report.SecondsByTitle[session.Title] += seconds; }
+                if (session.Completed)
+                {
+                    var ended = DateTimeOffset.ParseExact(session.EndedAt, "o", CultureInfo.InvariantCulture).Date;
+                    if (ended >= from && ended <= through) report.Completed++;
+                }
+            }
+            return report;
         }
         public static string FormatDuration(double seconds) { int value = (int)Math.Max(0, Math.Floor(seconds)); return (value / 60).ToString("D2") + ":" + (value % 60).ToString("D2"); }
+    }
+
+    public class StudyReport
+    {
+        public readonly Dictionary<string, double> SecondsByDay = new Dictionary<string, double>();
+        public readonly Dictionary<string, double> SecondsByTitle = new Dictionary<string, double>(StringComparer.Ordinal);
+        public int Completed;
+        public double TotalSeconds { get { return SecondsByDay.Values.Sum(); } }
     }
 
     [DataContract]

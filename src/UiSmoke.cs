@@ -255,6 +255,10 @@ namespace DeskTodo
                 Check(app.Store.State.Series.Count == 0 && app.Store.State.Items.Count(i => i.Title == "每日阅读") == 2 && app.Store.State.Items.Any(i => i.Id == futureDoneId && i.Done), "stopping repeat removes future pending occurrences and retains current and completed history");
                 app.Mutate(items => items.RemoveAll(i => i.Id == repeatToday.Id || i.Id == futureDoneId)); app.Main.SelectDay(DateTime.Today);
                 app.Main.SelectPage("番茄钟"); app.Main.UpdateLayout();
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "学习统计").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<Button>(app.Main).Count(b => AutomationProperties.GetName(b).StartsWith("学习柱状图 ")) == 7 && Controls<Button>(app.Main).Count(b => AutomationProperties.GetName(b).StartsWith("学习热力图 ")) == 30, "statistics shows seven chart days and thirty heatmap days even with no records");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "还没有时长记录"), "empty study statistics gives a useful starting hint");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "返回番茄钟").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var studyName = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习名称");
                 var studyMinutes = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习分钟");
                 studyName.Text = "阅读论文"; studyMinutes.Text = "25";
@@ -264,6 +268,9 @@ namespace DeskTodo
                 Check(app.FocusRunning && app.FocusSeconds > 0 && app.Store.State.ActiveFocus.Title == "阅读论文", "start button begins named focus countdown");
                 Check(Controls<TextBlock>(app.Main).First(t => AutomationProperties.GetName(t) == "学习倒计时").Text != "25:00", "visible focus clock counts down while dispatcher timer runs");
                 Capture(app.Main, Path.Combine(root, "focus-running.png"));
+                double beforeStatistics = app.FocusSeconds; app.Main.SelectPage("学习统计"); Pump(); Pump();
+                Check(app.FocusRunning && app.FocusSeconds > beforeStatistics, "viewing statistics does not interrupt running countdown");
+                app.Main.SelectPage("番茄钟");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "暂停").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 double pausedSeconds = app.FocusSeconds; Pump(); Pump();
                 Check(!app.FocusRunning && Math.Abs(app.FocusSeconds - pausedSeconds) < 0.001, "paused focus excludes time while paused");
@@ -308,6 +315,47 @@ namespace DeskTodo
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "复习笔记") && Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("完成 2 次")), "today dashboard displays names and completed focus count");
                 string studyBackup = Path.Combine(root, "study-backup.json"); app.Store.Export(studyBackup);
                 Check(DataStore.ReadState(studyBackup).FocusHistory.Count == 3, "backup exports study history together with tasks");
+                app.Store.ChangeState(state =>
+                {
+                    for (int day = 0; day < 14; day++)
+                    {
+                        var from = new DateTimeOffset(DateTime.Today.AddDays(day - 14).AddHours(9), DateTimeOffset.Now.Offset);
+                        int minutes = 30 + day % 7 * 5; bool done = day % 4 != 0;
+                        Study.Start(state, new[] { "阅读论文", "学习英语", "复习笔记" }[day % 3], minutes, from);
+                        int seconds = (done ? minutes : minutes - 10) * 60; Study.AddTime(state, from, seconds); Study.Finish(state, from.AddSeconds(seconds), done);
+                    }
+                    var oldDate = new DateTimeOffset(DateTime.Today.AddDays(-45).AddHours(9), DateTimeOffset.Now.Offset);
+                    Study.Start(state, "早期学习记录", 35, oldDate); Study.AddTime(state, oldDate, 2100); Study.Finish(state, oldDate.AddMinutes(35), true);
+                });
+                app.Main.SelectPage("学习统计"); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "15 天") && Controls<TextBlock>(app.Main).Any(t => t.Text == "12 次"), "statistics summary counts active dates and completed sessions in last thirty days");
+                var lookupDay = DateTime.Today.AddDays(-2);
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "学习热力图 " + Dates.Key(lookupDay)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "学习记录日期").SelectedDate == lookupDay && Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("1 条记录")), "clicking heatmap selects corresponding historical records");
+                var nameFilter = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习名称筛选"); nameFilter.Text = "没有这个名称";
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("0 条记录")), "study records can be searched by name"); nameFilter.Text = "";
+                var statusChoice = Controls<ComboBox>(app.Main).First(c => AutomationProperties.GetName(c) == "学习记录状态"); statusChoice.SelectedIndex = 1;
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("0 条记录")), "completed filter excludes early ended sessions"); statusChoice.SelectedIndex = 2;
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("1 条记录")), "early ending filter shows matching sessions"); statusChoice.SelectedIndex = 0;
+                Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "学习记录日期").SelectedDate = DateTime.Today.AddDays(-45);
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "早期学习记录"), "historical records outside current chart range remain accessible");
+                Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "统计截止日期").SelectedDate = DateTime.Today.AddDays(-45);
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1 天") && Controls<TextBlock>(app.Main).Any(t => t.Text == "1 次"), "changing chart cutoff loads older statistics");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "学习记录日期").SelectedDate == DateTime.Today, "today button restores current chart and record dates");
+                app.Store.ChangeState(state =>
+                {
+                    var batchDay = new DateTimeOffset(DateTime.Today.AddDays(-50).AddHours(9), DateTimeOffset.Now.Offset);
+                    for (int index = 0; index < 51; index++) { var from = batchDay.AddMinutes(index); Study.Start(state, "批次学习 " + index, 1, from); Study.AddTime(state, from, 60); Study.Finish(state, from.AddMinutes(1), true); }
+                }); app.Main.Refresh();
+                Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "学习记录日期").SelectedDate = DateTime.Today.AddDays(-50);
+                Check(Controls<TextBlock>(app.Main).Count(t => t.Text.StartsWith("批次学习 ")) == 50, "large daily record lists initially render fifty sessions");
+                Controls<Button>(app.Main).First(b => (b.Content as string ?? "").StartsWith("加载更多")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(Controls<TextBlock>(app.Main).Count(t => t.Text.StartsWith("批次学习 ")) == 51, "load more reveals remaining records without dropping history");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-statistics-" + skin + ".png")); }
+                var statsPage = Controls<StudyStatsPanel>(app.Main).First(); statsPage.ScrollToBottom(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-records.png")); statsPage.ScrollToTop();
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-statistics-small.png")); app.Main.Width = 1160; app.Main.Height = 790;
                 app.Main.SelectPage("月历");
                 app.Main.Close();
                 Check(!app.Main.IsVisible && app.Widget.IsVisible, "closing main leaves widget running");

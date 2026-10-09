@@ -19,6 +19,7 @@ namespace DeskTodo
         readonly Dictionary<string, Button> navigation = new Dictionary<string, Button>();
         readonly Button widgetToggle;
         FocusPanel focusPanel;
+        StudyStatsPanel studyStats;
         string page = "月历";
         bool showCompleted = true;
         DateTime selected = DateTime.Today;
@@ -56,7 +57,7 @@ namespace DeskTodo
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; Refresh(); }
-        public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); }
+        public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); if (page == "学习统计" && studyStats != null) studyStats.Refresh(); }
         public void SelectDay(DateTime date) { app.EnsureOccurrences(new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))); selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
         public void Refresh()
         {
@@ -68,9 +69,10 @@ namespace DeskTodo
             System.Windows.Automation.AutomationProperties.SetName(widgetToggle, visible ? "隐藏桌面小组件" : "显示桌面小组件");
             foreach (var pair in navigation)
             {
-                pair.Value.SetResourceReference(Button.BackgroundProperty, pair.Key == page ? "Soft" : "Sidebar");
-                pair.Value.SetResourceReference(Button.ForegroundProperty, pair.Key == page ? "Accent" : "Text");
-                pair.Value.FontWeight = pair.Key == page ? FontWeights.SemiBold : FontWeights.Normal;
+                bool active = pair.Key == page || (page == "学习统计" && pair.Key == "番茄钟");
+                pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "Sidebar");
+                pair.Value.SetResourceReference(Button.ForegroundProperty, active ? "Accent" : "Text");
+                pair.Value.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
             }
             tools.Children.Clear();
             if (page == "月历")
@@ -81,14 +83,18 @@ namespace DeskTodo
                 AddTool("›", () => SelectDay(Month.AddMonths(1)), 32);
             }
             else if (page == "番茄钟") { heading.Text = "番茄钟"; subtitle.Text = "给这段时间一个名字，专心学完这一轮"; }
+            else if (page == "学习统计") { heading.Text = "学习统计"; subtitle.Text = "看看时间去了哪里，也看看自己走了多远"; }
             else { heading.Text = page == "今天" ? "今天" : "全部待办"; subtitle.Text = page == "今天" ? DateTime.Today.ToString("M月d日 dddd") : "有日期与无日期的待办都在这里"; }
             Button theme = null; theme = Ui.Button("换肤", () => app.ThemeMenu(theme)); theme.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(theme);
-            if (page != "番茄钟") { var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
+            if (page == "番茄钟") AddTool("学习统计", () => SelectPage("学习统计"));
+            if (page == "学习统计") AddTool("返回番茄钟", () => SelectPage("番茄钟"));
+            if (page != "番茄钟" && page != "学习统计") { var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
-            if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
+            if (page == "学习统计") { if (studyStats == null) studyStats = new StudyStatsPanel(app); body.Children.Add(studyStats); studyStats.Refresh(true); }
+            else if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
             else if (page == "月历") RenderCalendar(); else RenderList();
             int pending = app.Store.State.Items.Count(i => !i.Done);
-            status.Text = page == "番茄钟" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
+            status.Text = page == "番茄钟" || page == "学习统计" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
         }
         void AddTool(string text, Action action, double width = 0)
         {

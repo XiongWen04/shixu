@@ -39,6 +39,16 @@ class CoreTests
             var studyReload = DataStore.ReadState(studyPath);
             Check(studyReload.ActiveFocus.Title == "读书" && studyReload.ActiveFocus.FocusedSeconds == 15.5 && studyReload.FocusHistory.Count == 2, "active progress and study history persist through backup roundtrip");
             Check(Study.FormatDuration(1500) == "25:00" && Study.FormatDuration(3661) == "61:01", "focus duration display supports long sessions");
+            var report = Study.Summarize(study.FocusHistory, new DateTime(2026, 10, 9), new DateTime(2026, 10, 10));
+            Check(report.SecondsByDay.Count == 2 && report.SecondsByDay["2026-10-09"] == 390 && report.SecondsByDay["2026-10-10"] == 1200, "charts use actual time and split sessions at midnight");
+            Check(report.SecondsByTitle["阅读论文"] == 1500 && report.SecondsByTitle["复习"] == 90 && report.Completed == 1, "subject ranking includes early endings and counts completed sessions separately");
+            var sameName = study.FocusHistory.Last().Copy(); sameName.Id = Guid.NewGuid().ToString("N"); sameName.Title = "阅读论文";
+            var groupedReport = Study.Summarize(study.FocusHistory.Concat(new[] { sameName }), new DateTime(2026, 10, 9), new DateTime(2026, 10, 9));
+            Check(groupedReport.SecondsByTitle["阅读论文"] == 390 && groupedReport.TotalSeconds == 480, "same-name study ranking sums only time within selected range");
+            var emptyReport = Study.Summarize(new FocusSession[0], new DateTime(2026, 10, 1), new DateTime(2026, 10, 7));
+            Check(emptyReport.SecondsByDay.Count == 7 && emptyReport.TotalSeconds == 0 && emptyReport.Completed == 0, "zero-study dates remain present in charts");
+            Check(Study.Summarize(new[] { study.ActiveFocus }, new DateTime(2026, 10, 9), new DateTime(2026, 10, 9)).TotalSeconds == 15.5, "current unfinished study can be included in statistics");
+            Throws(() => Study.Summarize(study.FocusHistory, new DateTime(2026, 10, 10), new DateTime(2026, 10, 9)), "inverted chart ranges are rejected");
             var boundaryStudy = new TodoState(); var boundaryStart = studyStart.Date.AddDays(1).AddTicks(-1);
             Study.Start(boundaryStudy, "跨日", 1, new DateTimeOffset(boundaryStart, studyStart.Offset)); Study.AddTime(boundaryStudy, new DateTimeOffset(boundaryStart, studyStart.Offset), 1);
             Check(Study.SecondsOn(boundaryStudy.ActiveFocus, boundaryStart.Date) < 0.001 && Study.SecondsOn(boundaryStudy.ActiveFocus, boundaryStart.Date.AddDays(1)) > 0.999, "submillisecond midnight boundary does not stall day statistics");
