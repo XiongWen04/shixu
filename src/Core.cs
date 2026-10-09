@@ -19,19 +19,33 @@ namespace DeskTodo
         [DataMember] public string Note = "";
         [DataMember] public string CreatedUtc;
         [DataMember] public bool Done;
+        [DataMember(EmitDefaultValue = false)] public bool Important;
+        [DataMember(EmitDefaultValue = false)] public bool Reminder;
+        [DataMember(EmitDefaultValue = false)] public string NotifiedFor;
+        [DataMember(EmitDefaultValue = false)] public string SeriesId;
         public TodoItem Copy() { return (TodoItem)MemberwiseClone(); }
     }
 
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 2;
+        [DataMember(IsRequired = true)] public int Version = 3;
         [DataMember(IsRequired = true)] public List<TodoItem> Items = new List<TodoItem>();
-        public TodoState Copy() { return new TodoState { Items = Items.Select(i => i.Copy()).ToList() }; }
+        [DataMember] public List<RepeatSeries> Series = new List<RepeatSeries>();
+        [OnDeserializing] void Defaults(StreamingContext c) { Series = new List<RepeatSeries>(); }
+        public TodoState Copy() { return new TodoState { Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList() }; }
         public void Validate()
         {
-            if (Version != 1 && Version != 2) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version != 1 && Version != 2 && Version != 3) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
             if (Items == null || Items.Count > 10000) throw new InvalidDataException("待办列表无效或超过 10000 条。");
+            if (Series == null || Series.Count > 1000) throw new InvalidDataException("重复规则无效或超过 1000 条。");
+            var seriesIds = new HashSet<string>();
+            foreach (var series in Series)
+            {
+                Guid ruleId;
+                if (series == null || !Guid.TryParse(series.Id, out ruleId) || !seriesIds.Add(series.Id) || series.Template == null || series.Template.Date == null || series.NextIndex < 1 || series.NextIndex > 3652059 || (series.Kind != "daily" && series.Kind != "weekly" && series.Kind != "monthly")) throw new InvalidDataException("重复规则无效。");
+                new TodoState { Items = new List<TodoItem> { series.Template } }.Validate();
+            }
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (var i in Items)
             {
@@ -43,7 +57,60 @@ namespace DeskTodo
                 if (i.Date != null && !DateTime.TryParseExact(i.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("待办日期无效。");
                 if (i.Time != null && (i.Date == null || !DateTime.TryParseExact(i.Time, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed))) throw new InvalidDataException("时间需要指定日期，并使用 00:00 至 23:59 的格式。");
                 if (i.Location != null && i.Location.Length > 200) throw new InvalidDataException("地点最多 200 字。");
+                if (i.Reminder && i.Time == null) throw new InvalidDataException("到点提醒需要日期和时间。");
+                if (i.NotifiedFor != null && !DateTime.TryParseExact(i.NotifiedFor, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("提醒记录无效。");
+                if (i.SeriesId != null && !seriesIds.Contains(i.SeriesId)) throw new InvalidDataException("待办关联的重复规则不存在。");
             }
+        }
+    }
+
+    [DataContract]
+    public class RepeatSeries
+    {
+        [DataMember(IsRequired = true)] public string Id;
+        [DataMember(IsRequired = true)] public string Kind;
+        [DataMember(IsRequired = true)] public TodoItem Template;
+        [DataMember] public int NextIndex;
+        public RepeatSeries Copy() { return new RepeatSeries { Id = Id, Kind = Kind, Template = Template.Copy(), NextIndex = NextIndex }; }
+    }
+
+    public static class Schedule
+    {
+        public static void AddSeries(TodoState state, TodoItem template, string kind)
+        {
+            if (template.Date == null || (kind != "daily" && kind != "weekly" && kind != "monthly")) throw new InvalidDataException("重复任务需要日期和有效周期。");
+            var copy = template.Copy(); copy.Done = false; copy.SeriesId = null; copy.NotifiedFor = null;
+            new TodoState { Items = new List<TodoItem> { copy } }.Validate();
+            var rule = new RepeatSeries { Id = Guid.NewGuid().ToString("N"), Kind = kind, Template = copy, NextIndex = 1 };
+            state.Series.Add(rule); template.SeriesId = rule.Id; state.Items.Add(template);
+        }
+        static DateTime? DateAt(RepeatSeries rule, int index)
+        {
+            var anchor = DateTime.ParseExact(rule.Template.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            try { return rule.Kind == "monthly" ? anchor.AddMonths(index) : anchor.AddDays((double)index * (rule.Kind == "weekly" ? 7 : 1)); }
+            catch (ArgumentOutOfRangeException) { return null; }
+        }
+        public static bool Expand(TodoState state, DateTime through)
+        {
+            bool changed = false;
+            foreach (var rule in state.Series)
+            {
+                DateTime? date;
+                while ((date = DateAt(rule, rule.NextIndex)).HasValue && date.Value <= through.Date)
+                {
+                    if (state.Items.Count >= 10000) throw new InvalidDataException("待办已达 10000 条，无法生成更多重复任务；请先导出并清理历史任务。");
+                    var item = rule.Template.Copy(); item.Id = Guid.NewGuid().ToString("N"); item.SeriesId = rule.Id; item.Date = Dates.Key(date.Value); item.Done = false; item.NotifiedFor = null;
+                    state.Items.Add(item); rule.NextIndex++; changed = true;
+                }
+            }
+            return changed;
+        }
+        public static string ReminderKey(TodoItem item) { return item.Date + " " + item.Time; }
+        public static bool IsDue(TodoItem item, DateTime now)
+        {
+            if (item.Done || !item.Reminder || item.Time == null || item.Date != Dates.Key(now) || item.NotifiedFor == ReminderKey(item)) return false;
+            DateTime due;
+            return DateTime.TryParseExact(ReminderKey(item), "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out due) && due <= now;
         }
     }
 
@@ -172,9 +239,11 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 2; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 3; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
+        public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }
+        public bool ExpandThrough(DateTime through) { var next = State.Copy(); if (!Schedule.Expand(next, through)) return false; Commit(next); return true; }
         public void Import(string path) { Commit(ReadState(path)); }
         public void Export(string path)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -55,7 +55,7 @@ namespace DeskTodo
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; Refresh(); }
-        public void SelectDay(DateTime date) { selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
+        public void SelectDay(DateTime date) { app.EnsureOccurrences(new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))); selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
         public void Refresh()
         {
             bool visible = app.Settings.WidgetVisible;
@@ -108,10 +108,10 @@ namespace DeskTodo
                 var number = Ui.Text(date.Day.ToString(), 13, currentMonth ? (isSelected ? "Accent" : "Text") : "Muted", isSelected || date == DateTime.Today); top.Children.Add(number);
                 if (date == DateTime.Today) { var today = Ui.Text("●", 8, "Accent"); today.HorizontalAlignment = HorizontalAlignment.Right; today.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(today); }
                 stack.Children.Add(top);
-                var items = app.Store.State.Items.Where(i => i.Date == Dates.Key(date)).OrderBy(i => i.Done).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
+                var items = app.Store.State.Items.Where(i => i.Date == Dates.Key(date)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
                 foreach (var item in items.Take(2))
                 {
-                    var preview = Ui.Text((item.Done ? "✓ " : "• ") + (item.Time == null ? "" : item.Time + " ") + item.Title, 10, item.Done || !currentMonth ? "Muted" : "Text");
+                    var preview = Ui.Text((item.Done ? "✓ " : item.Important ? "★ " : "• ") + (item.Time == null ? "" : item.Time + " ") + item.Title, 10, item.Done || !currentMonth ? "Muted" : "Text");
                     preview.TextWrapping = TextWrapping.NoWrap; preview.TextTrimming = TextTrimming.CharacterEllipsis; preview.Margin = new Thickness(0, 0, 0, 5); if (item.Done) preview.TextDecorations = TextDecorations.Strikethrough; stack.Children.Add(preview);
                 }
                 if (items.Count > 2) stack.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
@@ -125,7 +125,7 @@ namespace DeskTodo
             if (app.CanUndo) { var undo = Ui.Button("撤销删除", app.UndoDelete, "Quiet"); undo.Margin = new Thickness(0, 7, 0, 0); footer.Children.Add(undo); }
             var title = new StackPanel { Margin = new Thickness(0, 0, 0, 18) }; title.Children.Add(Ui.Text(selected.ToString("M月d日"), 21, "Text", true)); title.Children.Add(Ui.Text(selected.ToString("dddd"), 12, "Muted")); DockPanel.SetDock(title, Dock.Top); detail.Children.Add(title);
             var list = new StackPanel();
-            var selectedItems = app.Store.State.Items.Where(i => i.Date == Dates.Key(selected)).OrderBy(i => i.Done).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
+            var selectedItems = app.Store.State.Items.Where(i => i.Date == Dates.Key(selected)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
             if (selectedItems.Count == 0) Ui.Empty(list, "这一天还没有安排", "添加一件想完成的事");
             else foreach (var item in selectedItems) list.Children.Add(Ui.TaskRow(app, item, false));
             detail.Children.Add(Ui.Scroll(list)); var detailCard = Ui.Card(detail, new Thickness(16)); Grid.SetColumn(detailCard, 1); body.Children.Add(detailCard);
@@ -141,9 +141,9 @@ namespace DeskTodo
             var items = app.Store.State.Items.Where(i => showCompleted || !i.Done).ToList();
             if (page == "今天")
             {
-                var overdue = items.Where(i => Dates.Overdue(i, DateTime.Today)).OrderBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ToList();
+                var overdue = items.Where(i => Dates.Overdue(i, DateTime.Today)).OrderByDescending(i => i.Important).ThenBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ToList();
                 if (overdue.Count > 0) { var h = Ui.Text("逾期 · " + overdue.Count + " 件", 13, "Danger", true); h.Margin = new Thickness(0, 0, 0, 12); list.Children.Add(h); foreach (var item in overdue) list.Children.Add(Ui.TaskRow(app, item, false)); }
-                var today = items.Where(i => i.Date == Dates.Key(DateTime.Today)).OrderBy(i => i.Done).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
+                var today = items.Where(i => i.Date == Dates.Key(DateTime.Today)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
                 var label = Ui.Text("今天 · " + today.Count + " 件", 13, "Muted", true); label.Margin = new Thickness(0, overdue.Count > 0 ? 14 : 0, 0, 12); list.Children.Add(label);
                 if (today.Count == 0) Ui.Empty(list, "今天还没有安排", "点右上角“添加”，记下今天要做的事");
                 else foreach (var item in today) list.Children.Add(Ui.TaskRow(app, item, false));
@@ -151,7 +151,7 @@ namespace DeskTodo
             else
             {
                 if (items.Count == 0) Ui.Empty(list, "还没有待办", "添加第一件事，也可以先不设日期");
-                else foreach (var item in items.OrderBy(i => i.Done).ThenBy(i => i.Date ?? "9999-99-99").ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc)) list.Children.Add(Ui.TaskRow(app, item, false));
+                else foreach (var item in items.OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Date ?? "9999-99-99").ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc)) list.Children.Add(Ui.TaskRow(app, item, false));
             }
         }
     }

@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
 
 namespace DeskTodo
 {
@@ -74,6 +74,8 @@ namespace DeskTodo
         TodoItem deleted;
         Forms.NotifyIcon tray;
         DispatcherTimer timer;
+        internal Window ReminderPopup;
+        bool reminderErrorShown;
         DateTime lastDay = DateTime.Today;
 
         public AppController(string root, bool test)
@@ -123,6 +125,7 @@ namespace DeskTodo
         public void Start()
         {
             SetPalette(Settings.Theme);
+            Store.ExpandThrough(DateTime.Today.AddDays(62));
             Main = new MainWindow(this);
             Application.Current.MainWindow = Main;
             Widget = new WidgetWindow(this);
@@ -142,7 +145,8 @@ namespace DeskTodo
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             timer.Tick += (s, e) =>
             {
-                if (lastDay != DateTime.Today) { lastDay = DateTime.Today; Refresh(); }
+                if (lastDay != DateTime.Today) { if (EnsureOccurrences(DateTime.Today.AddDays(62))) { lastDay = DateTime.Today; Refresh(); } }
+                if (!TestMode) CheckReminders(DateTime.Now);
                 if (Settings.WidgetVisible)
                 {
                     if (Widget == null || !Widget.IsLoaded || !NativeDesktop.IsAlive(Widget)) { Widget = new WidgetWindow(this); Widget.Show(); Widget.Refresh(); }
@@ -151,6 +155,58 @@ namespace DeskTodo
                 }
             };
             timer.Start();
+            if (!TestMode) CheckReminders(DateTime.Now);
+        }
+        public bool EnsureOccurrences(DateTime through)
+        {
+            try { Store.ExpandThrough(through); return true; }
+            catch (Exception ex) { if (TestMode) throw; if (!reminderErrorShown) { reminderErrorShown = true; Error("生成重复待办失败", ex); } return false; }
+        }
+        public void CheckReminders(DateTime now)
+        {
+            if (ReminderPopup != null || Exiting) return;
+            var due = Store.State.Items.Where(i => Schedule.IsDue(i, now)).OrderByDescending(i => i.Important).ThenBy(i => i.Time).ToList();
+            if (due.Count == 0) return;
+            try
+            {
+                Store.Change(items => { foreach (var item in items.Where(i => Schedule.IsDue(i, now))) item.NotifiedFor = Schedule.ReminderKey(item); });
+                ReminderPopup = new ReminderWindow(this, due);
+                ReminderPopup.Closed += (s, e) => ReminderPopup = null;
+                ReminderPopup.Show(); reminderErrorShown = false;
+            }
+            catch (Exception ex) { if (TestMode) throw; if (!reminderErrorShown) { reminderErrorShown = true; Error("提醒记录保存失败", ex); } }
+        }
+        public bool SaveTodo(TodoItem item, TodoItem existing, string repeatKind)
+        {
+            try
+            {
+                Store.ChangeState(state =>
+                {
+                    if (existing != null) { int index = state.Items.FindIndex(i => i.Id == item.Id); if (index < 0) throw new InvalidOperationException("这条待办已不存在。"); state.Items.RemoveAt(index); }
+                    if (item.SeriesId == null && repeatKind != null) Schedule.AddSeries(state, item.Copy(), repeatKind);
+                    else state.Items.Add(item.Copy());
+                    Schedule.Expand(state, DateTime.Today.AddDays(62));
+                });
+                Refresh(); return true;
+            }
+            catch (Exception ex) { if (TestMode) throw; Error("保存失败", ex); return false; }
+        }
+        public void ToggleImportant(string id) { Mutate(items => { var item = items.First(i => i.Id == id); item.Important = !item.Important; }); }
+        public void StopRepeating(TodoItem item)
+        {
+            if (item.SeriesId == null) return;
+            if (!TestMode && MessageBox.Show("停止这组任务的重复？\n\n保留当次及更早任务，移除后续未完成任务；已完成记录保留。", "停止重复", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            try
+            {
+                Store.ChangeState(state =>
+                {
+                    state.Series.RemoveAll(r => r.Id == item.SeriesId);
+                    state.Items.RemoveAll(i => i.SeriesId == item.SeriesId && !i.Done && String.CompareOrdinal(i.Date, item.Date) > 0);
+                    foreach (var occurrence in state.Items.Where(i => i.SeriesId == item.SeriesId)) occurrence.SeriesId = null;
+                });
+                deleted = null; Refresh();
+            }
+            catch (Exception ex) { if (TestMode) throw; Error("停止重复失败", ex); }
         }
         public void Error(string operation, Exception ex) { MessageBox.Show(operation + "：\n" + ex.Message + "\n\n已保存的数据保持不变。", "拾序", MessageBoxButton.OK, MessageBoxImage.Error); }
         public bool Mutate(Action<List<TodoItem>> change)
@@ -244,7 +300,7 @@ namespace DeskTodo
         }
         public void Import(string path)
         {
-            try { Store.Import(path); deleted = null; Refresh(); }
+            try { var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Items = imported.Items; state.Series = imported.Series; }); deleted = null; Refresh(); }
             catch (Exception ex) { Error("导入失败", ex); }
         }
         public void Exit()
@@ -252,6 +308,7 @@ namespace DeskTodo
             if (Exiting) return;
             Exiting = true;
             if (timer != null) timer.Stop();
+            if (ReminderPopup != null) ReminderPopup.Close();
             if (tray != null) { tray.Visible = false; tray.Dispose(); }
             if (Widget != null) { NativeDesktop.Detach(Widget); Widget.Close(); }
             if (Main != null) Main.Close();

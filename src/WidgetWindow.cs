@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -76,10 +76,10 @@ namespace DeskTodo
             dateLabel.Text = DateTime.Today.ToString("M月d日 dddd"); tasks.Children.Clear();
             var items = app.Store.State.Items.Where(i => !i.Done && (i.Date == Dates.Key(DateTime.Today) || Dates.Overdue(i, DateTime.Today))).ToList();
             DisplayedCount = items.Count;
-            var today = items.Where(i => i.Date == Dates.Key(DateTime.Today)).OrderBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
+            var today = items.Where(i => i.Date == Dates.Key(DateTime.Today)).OrderByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
             if (today.Count == 0) Ui.Empty(tasks, "今天的待办已清空", "添加一件事，或享受片刻空闲");
             else foreach (var item in today) tasks.Children.Add(Ui.TaskRow(app, item, true));
-            var overdue = items.Where(i => Dates.Overdue(i, DateTime.Today)).OrderBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ToList();
+            var overdue = items.Where(i => Dates.Overdue(i, DateTime.Today)).OrderByDescending(i => i.Important).ThenBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ToList();
             if (overdue.Count > 0) { var label = Ui.Text("逾期 · " + overdue.Count + " 件", 12, "Danger", true); label.Margin = new Thickness(0, 13, 0, 10); tasks.Children.Add(label); foreach (var item in overdue) tasks.Children.Add(Ui.TaskRow(app, item, true)); }
             surface.Update();
         }

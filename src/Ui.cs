@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -39,6 +39,7 @@ namespace DeskTodo
         public static FrameworkElement TaskRow(AppController app, TodoItem item, bool compact)
         {
             var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) }); row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
             if (!compact) { row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) }); }
             var check = new CheckBox { IsChecked = item.Done, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0), ToolTip = "标记完成 / 恢复待办" };
             AutomationProperties.SetName(check, "完成 " + item.Title);
@@ -52,21 +53,25 @@ namespace DeskTodo
             if (!String.IsNullOrWhiteSpace(note)) { var n = Text(note, 11, "Muted"); n.MaxHeight = 34; n.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(n); }
             string date = item.Date == null ? "未设日期" : DateTime.ParseExact(item.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("M月d日");
             if (item.Time != null) date += "  " + item.Time;
+            if (item.Reminder) date += " · 提醒";
+            if (item.SeriesId != null) date += " · 重复";
             if (Dates.Overdue(item, DateTime.Today)) date += " · 逾期";
             var label = Text(date, 10, Dates.Overdue(item, DateTime.Today) ? "Danger" : "Muted"); label.Margin = new Thickness(0, 6, 0, 0); content.Children.Add(label);
             if (!String.IsNullOrWhiteSpace(item.Location)) { var location = Text("地点：" + item.Location, 11, "Muted"); location.MaxHeight = 34; location.Margin = new Thickness(0, 4, 0, 0); location.ToolTip = item.Location; content.Children.Add(location); }
             content.MouseLeftButtonDown += (s, e) => { if (e.ClickCount == 2) app.Edit(item, null); };
             Grid.SetColumn(content, 1); row.Children.Add(content);
+            var star = Button(item.Important ? "★" : "☆", () => app.ToggleImportant(item.Id), "Quiet"); star.Padding = new Thickness(0); star.FontSize = 18; star.VerticalAlignment = VerticalAlignment.Top; star.SetResourceReference(System.Windows.Controls.Button.ForegroundProperty, item.Important ? "Accent" : "Muted"); star.ToolTip = item.Important ? "取消重要任务" : "标为重要任务"; AutomationProperties.SetName(star, "重要 " + item.Title); Grid.SetColumn(star, 2); row.Children.Add(star);
             if (!compact)
             {
-                var edit = Button("✎", () => app.Edit(item, null), "Quiet"); edit.Padding = new Thickness(0); edit.ToolTip = "编辑"; edit.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(edit, "编辑 " + item.Title); Grid.SetColumn(edit, 2); row.Children.Add(edit);
-                var remove = Button("×", () => app.Delete(item.Id), "Quiet"); remove.Padding = new Thickness(0); remove.ToolTip = "删除（可撤销）"; remove.FontSize = 19; remove.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(remove, "删除 " + item.Title); Grid.SetColumn(remove, 3); row.Children.Add(remove);
+                var edit = Button("✎", () => app.Edit(item, null), "Quiet"); edit.Padding = new Thickness(0); edit.ToolTip = "编辑"; edit.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(edit, "编辑 " + item.Title); Grid.SetColumn(edit, 3); row.Children.Add(edit);
+                var remove = Button("×", () => app.Delete(item.Id), "Quiet"); remove.Padding = new Thickness(0); remove.ToolTip = "删除当次（可撤销）"; remove.FontSize = 19; remove.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(remove, "删除 " + item.Title); Grid.SetColumn(remove, 4); row.Children.Add(remove);
             }
             var card = Card(row, new Thickness(compact ? 12 : 14)); card.Margin = new Thickness(0, 0, 0, 9);
             if (compact) { card.SetResourceReference(Border.BackgroundProperty, "GlassCard"); card.SetResourceReference(Border.BorderBrushProperty, "GlassBorder"); }
             var menu = new ContextMenu();
             var editMenu = new MenuItem { Header = "编辑" }; editMenu.Click += (s, e) => app.Edit(item, null); menu.Items.Add(editMenu);
             var deleteMenu = new MenuItem { Header = "删除（可撤销）" }; deleteMenu.Click += (s, e) => app.Delete(item.Id); menu.Items.Add(deleteMenu);
+            if (item.SeriesId != null) { var stop = new MenuItem { Header = "停止后续重复" }; stop.Click += (s, e) => app.StopRepeating(item); menu.Items.Add(stop); }
             card.ContextMenu = menu; return card;
         }
         public static void Empty(Panel panel, string title, string hint)
@@ -114,6 +119,14 @@ namespace DeskTodo
             Action updateClock = () => { bool dated = noDate.IsChecked != true && picker.SelectedDate.HasValue; timed.IsEnabled = dated; if (!dated) timed.IsChecked = false; clock.IsEnabled = dated && timed.IsChecked == true; };
             noDate.Click += (s, e) => { picker.IsEnabled = noDate.IsChecked != true; if (picker.IsEnabled && !picker.SelectedDate.HasValue) picker.SelectedDate = DateTime.Today; updateClock(); };
             timed.Click += (s, e) => updateClock(); picker.SelectedDateChanged += (s, e) => updateClock(); updateClock();
+            var reminder = new CheckBox { Content = "到点提醒", IsChecked = existing == null || existing.Reminder, Margin = new Thickness(0, 12, 0, 0), ToolTip = "右下角小通知，无声音；需要日期和时间，程序须保持运行" }; AutomationProperties.SetName(reminder, "到点提醒"); fields.Children.Add(reminder);
+            Action updateReminder = () => reminder.IsEnabled = timed.IsChecked == true && noDate.IsChecked != true;
+            timed.Checked += (s, e) => updateReminder(); timed.Unchecked += (s, e) => updateReminder(); updateReminder();
+            var repeatLabel = Ui.Text("重复", 12, "Muted"); repeatLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(repeatLabel);
+            string[] repeatNames = { "不重复", "每天", "每周", "每月" }; string[] repeatKinds = { null, "daily", "weekly", "monthly" };
+            var repeat = new ComboBox { ItemsSource = repeatNames, SelectedIndex = 0, Height = 36 }; AutomationProperties.SetName(repeat, "重复周期"); fields.Children.Add(repeat);
+            if (existing != null && existing.SeriesId != null) { var rule = app.Store.State.Series.First(r => r.Id == existing.SeriesId); repeat.SelectedIndex = Array.IndexOf(repeatKinds, rule.Kind); repeat.IsEnabled = false; fields.Children.Add(Ui.Text("编辑只影响当次；右键任务可停止后续重复。", 11, "Muted")); }
+            var important = new CheckBox { Content = "重要任务（星标置顶）", IsChecked = existing != null && existing.Important, Margin = new Thickness(0, 12, 0, 0) }; AutomationProperties.SetName(important, "重要任务"); fields.Children.Add(important);
             var locationLabel = Ui.Text("地点（可选）", 12, "Muted"); locationLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(locationLabel);
             var location = new TextBox { Text = existing == null ? "" : existing.Location ?? "", MaxLength = 200, ToolTip = "例如：会议室、实验室、线上" }; AutomationProperties.SetName(location, "待办地点"); fields.Children.Add(location);
             var noteLabel = Ui.Text("备注（可选）", 12, "Muted"); noteLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(noteLabel);
@@ -126,14 +139,43 @@ namespace DeskTodo
                 if (String.IsNullOrWhiteSpace(title.Text)) { error.Text = "请填写待办标题。"; title.Focus(); return; }
                 if (noDate.IsChecked != true && !picker.SelectedDate.HasValue) { error.Text = "请选择日期，或勾选“不设日期”。"; return; }
                 if (timed.IsChecked == true && (hours.SelectedItem == null || minutes.SelectedItem == null)) { error.Text = "请选择小时和分钟。"; return; }
+                if (noDate.IsChecked == true && repeat.SelectedIndex > 0 && repeat.IsEnabled) { error.Text = "重复任务需要设置日期。"; return; }
+                if (existing != null && existing.SeriesId != null && noDate.IsChecked == true) { error.Text = "重复任务需要日期；请先停止后续重复。"; return; }
                 var item = existing == null ? new TodoItem { Id = Guid.NewGuid().ToString("N"), CreatedUtc = DateTime.UtcNow.ToString("o") } : existing.Copy();
                 item.Title = title.Text.Trim(); item.Note = note.Text.Trim(); item.Done = done.IsChecked == true;
                 item.Date = noDate.IsChecked == true ? null : Dates.Key(picker.SelectedDate.Value);
                 item.Time = item.Date != null && timed.IsChecked == true ? hours.SelectedItem + ":" + minutes.SelectedItem : null;
                 item.Location = String.IsNullOrWhiteSpace(location.Text) ? null : location.Text.Trim();
-                if (app.Mutate(items => { if (existing == null) items.Add(item); else { int index = items.FindIndex(i => i.Id == item.Id); if (index < 0) throw new InvalidOperationException("这条待办已不存在。"); items[index] = item; } })) Close();
+                item.Important = important.IsChecked == true; item.Reminder = item.Time != null && reminder.IsChecked == true;
+                if (app.SaveTodo(item, existing, repeat.IsEnabled ? repeatKinds[repeat.SelectedIndex] : null)) Close();
             }, "Primary"); save.IsDefault = true; bottom.Children.Add(save);
             Loaded += (s, e) => { title.Focus(); title.SelectAll(); };
+        }
+    }
+
+    public class ReminderWindow : Window
+    {
+        readonly System.Windows.Threading.DispatcherTimer dismiss;
+        public ReminderWindow(AppController app, System.Collections.Generic.List<TodoItem> items)
+        {
+            Title = "拾序提醒"; Width = 360; SizeToContent = SizeToContent.Height; WindowStyle = WindowStyle.None;
+            AllowsTransparency = true; Background = Brushes.Transparent; ShowInTaskbar = false; ShowActivated = false; Topmost = true; Ui.Icon(this);
+            var panel = new StackPanel();
+            var header = new DockPanel(); var close = Ui.Button("×", () => Close(), "Quiet"); close.ToolTip = "关闭提醒"; close.Padding = new Thickness(6, 0, 6, 0); DockPanel.SetDock(close, Dock.Right); header.Children.Add(close);
+            header.Children.Add(Ui.Text(items.Count == 1 ? "拾序 · 到点提醒" : "拾序 · " + items.Count + " 件待办到点", 14, "Accent", true)); panel.Children.Add(header);
+            foreach (var item in items.Take(3))
+            {
+                var title = Ui.Text((item.Important ? "★ " : "") + item.Title, 15, "Text", true); title.Margin = new Thickness(0, 12, 0, 4); title.MaxHeight = 44; panel.Children.Add(title);
+                var details = Ui.Text(item.Time + (String.IsNullOrWhiteSpace(item.Location) ? "" : " · " + item.Location), 12, "Muted"); details.MaxHeight = 36; details.ToolTip = details.Text; panel.Children.Add(details);
+            }
+            var hint = Ui.Text(items.Count > 3 ? "还有 " + (items.Count - 3) + " 件，点击查看全部" : "点击查看 · 8 秒后收起", 11, "Muted"); hint.Margin = new Thickness(0, 14, 0, 0); panel.Children.Add(hint);
+            var card = Ui.Card(panel, new Thickness(18)); card.Margin = new Thickness(4); Content = card;
+            card.MouseLeftButtonUp += (s, e) => { app.ShowMain(); app.Main.SelectPage("今天"); Close(); };
+            dismiss = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+            dismiss.Tick += (s, e) => Close();
+            MouseEnter += (s, e) => dismiss.Stop(); MouseLeave += (s, e) => dismiss.Start();
+            Loaded += (s, e) => { var area = SystemParameters.WorkArea; Left = area.Right - ActualWidth - 16; Top = area.Bottom - ActualHeight - 16; dismiss.Start(); };
+            Closed += (s, e) => dismiss.Stop();
         }
     }
 

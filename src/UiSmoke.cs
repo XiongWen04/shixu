@@ -24,6 +24,7 @@ namespace DeskTodo
         [DllImport("user32.dll")] static extern IntPtr GetTopWindow(IntPtr hwnd);
         [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint relation);
         [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr hwnd, IntPtr dc, uint flags);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
         static void Pump()
         {
@@ -175,7 +176,7 @@ namespace DeskTodo
                 var editor = new EditWindow(app, null, DateTime.Today);
                 editor.Show(); editor.UpdateLayout(); Capture(editor, Path.Combine(root, "editor.png"));
                 Check(Controls<DatePickerTextBox>(editor).First().Background == Application.Current.Resources["Panel"], "date input follows dark theme");
-                Check(Controls<ComboBox>(editor).Count() == 2, "editor offers hour and minute selection");
+                Check(Controls<ComboBox>(editor).Any(c => AutomationProperties.GetName(c) == "待办小时") && Controls<ComboBox>(editor).Any(c => AutomationProperties.GetName(c) == "待办分钟"), "editor offers hour and minute selection");
                 Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办标题").Text = "界面输入测试";
                 Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办地点").Text = "会议室 A";
                 var timedCheck = Controls<CheckBox>(editor).First(c => (c.Content as string) == "指定时间");
@@ -218,6 +219,41 @@ namespace DeskTodo
                 Check(app.Settings.Theme == "warm", "real skin button switches theme"); settings.Close();
                 app.Main.SelectPage("今天"); Capture(app.Main, Path.Combine(root, "today.png"));
                 app.Main.SelectPage("全部"); Capture(app.Main, Path.Combine(root, "all.png"));
+                var repeatEditor = new EditWindow(app, null, DateTime.Today); repeatEditor.Show(); repeatEditor.UpdateLayout();
+                Controls<TextBox>(repeatEditor).First(t => AutomationProperties.GetName(t) == "待办标题").Text = "每日阅读";
+                var repeatTime = Controls<CheckBox>(repeatEditor).First(c => (c.Content as string) == "指定时间"); repeatTime.IsChecked = true; repeatTime.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Controls<ComboBox>(repeatEditor).First(c => AutomationProperties.GetName(c) == "待办小时").SelectedItem = "00";
+                Controls<ComboBox>(repeatEditor).First(c => AutomationProperties.GetName(c) == "待办分钟").SelectedItem = "00";
+                Controls<ComboBox>(repeatEditor).First(c => AutomationProperties.GetName(c) == "重复周期").SelectedIndex = 1;
+                Controls<CheckBox>(repeatEditor).First(c => AutomationProperties.GetName(c) == "重要任务").IsChecked = true;
+                Capture(repeatEditor, Path.Combine(root, "editor-recurring.png"));
+                Controls<Button>(repeatEditor).First(b => (b.Content as string) == "保存待办").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Store.State.Series.Count == 1 && app.Store.State.Items.Count(i => i.Title == "每日阅读") == 63, "real editor creates calendar occurrences independent of completion");
+                var repeatToday = app.Store.State.Items.First(i => i.Title == "每日阅读" && i.Date == Dates.Key(DateTime.Today));
+                Check(repeatToday.Reminder && repeatToday.Important, "real editor saves reminder and importance");
+                app.Main.SelectPage("全部"); app.Main.UpdateLayout();
+                Check(AutomationProperties.GetName(Controls<CheckBox>(app.Main).First(c => AutomationProperties.GetName(c).StartsWith("完成 "))) == "完成 每日阅读", "important pending tasks sort before other pending tasks");
+                var star = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "重要 每日阅读"); star.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!app.Store.State.Items.First(i => i.Id == repeatToday.Id).Important && !DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Items.First(i => i.Id == repeatToday.Id).Important, "star toggles and persists on an individual occurrence");
+                app.ToggleImportant(repeatToday.Id);
+                app.Widget.UpdateLayout();
+                Check(AutomationProperties.GetName(Controls<CheckBox>(app.Widget).First()) == "完成 每日阅读", "widget displays important today tasks first");
+                IntPtr focusBeforeReminder = GetForegroundWindow();
+                app.CheckReminders(DateTime.Today.AddHours(12)); Pump();
+                Check(app.ReminderPopup != null && app.ReminderPopup.IsVisible && !app.ReminderPopup.ShowActivated && app.ReminderPopup.Topmost, "small reminder popup is visible without requesting focus");
+                Check(GetForegroundWindow() == focusBeforeReminder, "reminder does not activate or steal foreground focus");
+                Capture(app.ReminderPopup, Path.Combine(root, "reminder.png"));
+                Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Items.First(i => i.Id == repeatToday.Id).NotifiedFor == Schedule.ReminderKey(repeatToday), "reminder acknowledgement is saved before showing");
+                Controls<Button>(app.ReminderPopup).First(b => (b.Content as string) == "×").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                app.CheckReminders(DateTime.Today.AddHours(12));
+                Check(app.ReminderPopup == null, "same occurrence is not notified twice");
+                app.Main.SelectDay(DateTime.Today.AddMonths(4));
+                Check(app.Store.State.Items.Any(i => i.SeriesId == repeatToday.SeriesId && i.Date == Dates.Key(DateTime.Today.AddMonths(4))), "navigating future calendar generates future occurrences");
+                var futureDoneId = app.Store.State.Items.First(i => i.SeriesId == repeatToday.SeriesId && i.Date == Dates.Key(DateTime.Today.AddDays(1))).Id;
+                app.Toggle(futureDoneId, true);
+                app.StopRepeating(app.Store.State.Items.First(i => i.Id == repeatToday.Id));
+                Check(app.Store.State.Series.Count == 0 && app.Store.State.Items.Count(i => i.Title == "每日阅读") == 2 && app.Store.State.Items.Any(i => i.Id == futureDoneId && i.Done), "stopping repeat removes future pending occurrences and retains current and completed history");
+                app.Mutate(items => items.RemoveAll(i => i.Id == repeatToday.Id || i.Id == futureDoneId)); app.Main.SelectDay(DateTime.Today);
                 app.Main.Close();
                 Check(!app.Main.IsVisible && app.Widget.IsVisible, "closing main leaves widget running");
                 Check(!app.Widget.Topmost, "widget is not topmost");
