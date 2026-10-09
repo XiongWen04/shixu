@@ -65,7 +65,7 @@
 
 便携版解压后运行 `拾序.exe`，并保留旁边的 `拾序.exe.config`。关闭主窗口只会隐藏主窗口；彻底退出请在托盘菜单中选择“退出”。
 
-从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.3.2-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。当前仓库为私有仓库，访问页面和下载附件需要相应权限。
+从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.3.2-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
 
 ### 第一次使用
 
