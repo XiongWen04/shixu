@@ -1,0 +1,24 @@
+# 本机运行程序、个人数据、备份与测试工作目录
+/outputs/
+/work/
+/dist/
+/test-results/
+
+# 数据文件（自选保存位置时也不要提交）
+**/Data/
+tasks.json*
+preferences.json*
+*.bak
+*.tmp
+
+# 编译结果及编辑器缓存
+*.exe
+*.exe.config
+*.pdb
+*.zip
+.vs/
+.vscode/
+bin/
+obj/
+Thumbs.db
+Desktop.ini
