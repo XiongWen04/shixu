@@ -16,6 +16,48 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            var study = new TodoState();
+            var studyStart = new DateTimeOffset(2026, 10, 9, 23, 55, 0, TimeSpan.FromHours(8));
+            Study.Start(study, "阅读论文", 25, studyStart);
+            Study.AddTime(study, studyStart, 300);
+            Study.AddTime(study, studyStart.AddMinutes(10), 1200);
+            Check(study.ActiveFocus.FocusedSeconds == 1500 && study.ActiveFocus.Slices.Count == 2, "focus counts active segments and excludes gaps while paused");
+            Check(Study.SecondsOn(study.ActiveFocus, new DateTime(2026, 10, 9)) == 300 && Study.SecondsOn(study.ActiveFocus, new DateTime(2026, 10, 10)) == 1200, "study time crossing midnight is assigned to each day");
+            Study.AddTime(study, studyStart.AddHours(1), 100);
+            Check(study.ActiveFocus.FocusedSeconds == 1500, "focus never counts beyond planned duration");
+            Study.Finish(study, studyStart.AddMinutes(30), true);
+            Check(study.ActiveFocus == null && study.FocusHistory.Count == 1 && study.FocusHistory[0].Completed, "completed focus session is recorded once");
+            Throws(() => Study.Finish(study, studyStart.AddMinutes(31), true), "cannot record the same focus twice");
+            Study.Start(study, "复习", 10, studyStart); Study.AddTime(study, studyStart, 90); Study.Finish(study, studyStart.AddMinutes(2), false);
+            Check(!study.FocusHistory.Last().Completed && study.FocusHistory.Last().FocusedSeconds == 90, "ending early records actual time rather than planned time");
+            Throws(() => Study.Start(study, " ", 25, studyStart), "focus name is required");
+            Throws(() => Study.Start(study, "复习", 0, studyStart), "focus duration must be positive");
+            Throws(() => Study.Start(study, "复习", 721, studyStart), "focus duration has a bounded maximum");
+            Study.Start(study, "读书", 25, studyStart); Study.AddTime(study, studyStart, 15.5);
+            Throws(() => Study.Start(study, "另一项", 25, studyStart), "only one active focus is allowed");
+            string studyPath = Path.Combine(root, "study.json"); JsonFile.Write(studyPath, study);
+            var studyReload = DataStore.ReadState(studyPath);
+            Check(studyReload.ActiveFocus.Title == "读书" && studyReload.ActiveFocus.FocusedSeconds == 15.5 && studyReload.FocusHistory.Count == 2, "active progress and study history persist through backup roundtrip");
+            Check(Study.FormatDuration(1500) == "25:00" && Study.FormatDuration(3661) == "61:01", "focus duration display supports long sessions");
+            var boundaryStudy = new TodoState(); var boundaryStart = studyStart.Date.AddDays(1).AddTicks(-1);
+            Study.Start(boundaryStudy, "跨日", 1, new DateTimeOffset(boundaryStart, studyStart.Offset)); Study.AddTime(boundaryStudy, new DateTimeOffset(boundaryStart, studyStart.Offset), 1);
+            Check(Study.SecondsOn(boundaryStudy.ActiveFocus, boundaryStart.Date) < 0.001 && Study.SecondsOn(boundaryStudy.ActiveFocus, boundaryStart.Date.AddDays(1)) > 0.999, "submillisecond midnight boundary does not stall day statistics");
+            var invalidFocus = study.ActiveFocus.Copy(); invalidFocus.Slices[0].Seconds = Double.NaN;
+            Throws(() => new TodoState { ActiveFocus = invalidFocus }.Validate(), "invalid nonfinite study duration is rejected");
+            var duplicateStudy = study.Copy(); duplicateStudy.FocusHistory.Add(duplicateStudy.FocusHistory[0].Copy());
+            Throws(() => duplicateStudy.Validate(), "duplicate study record IDs are rejected");
+            using (var focusStore = DataStore.Open(Path.Combine(root, "专注保存")))
+            {
+                focusStore.ChangeState(state => { Study.Start(state, "保存保护", 25, studyStart); Study.AddTime(state, studyStart, 100); });
+                string savedFocus = File.ReadAllText(Path.Combine(focusStore.DirectoryPath, "tasks.json"));
+                using (var locked = new FileStream(Path.Combine(focusStore.DirectoryPath, "tasks.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+                    Throws(() => focusStore.ChangeState(state => Study.Finish(state, studyStart.AddMinutes(2), false)), "study completion save failure is reported");
+                Check(focusStore.State.ActiveFocus != null && focusStore.State.FocusHistory.Count == 0 && File.ReadAllText(Path.Combine(focusStore.DirectoryPath, "tasks.json")) == savedFocus, "failed study save retains active progress and original records");
+                focusStore.ChangeState(state => Study.Finish(state, studyStart.AddMinutes(2), false));
+                string focusExport = Path.Combine(root, "focus-export.json"); focusStore.Export(focusExport);
+                focusStore.ChangeState(state => state.FocusHistory.Clear()); focusStore.Import(focusExport);
+                Check(focusStore.State.FocusHistory.Count == 1 && focusStore.State.FocusHistory[0].FocusedSeconds == 100, "study history participates in export and import without loss");
+            }
             var repeating = new TodoState();
             var template = Item("月末组会", "2024-01-31"); template.Time = "14:30"; template.Location = "会议室"; template.Important = true; template.Reminder = true;
             Schedule.AddSeries(repeating, template, "monthly");
@@ -85,10 +127,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 3 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 4 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 3, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 4, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");

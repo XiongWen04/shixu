@@ -156,13 +156,13 @@ namespace DeskTodo
     public class ReminderWindow : Window
     {
         readonly System.Windows.Threading.DispatcherTimer dismiss;
-        public ReminderWindow(AppController app, System.Collections.Generic.List<TodoItem> items)
+        public ReminderWindow(AppController app, System.Collections.Generic.List<TodoItem> items, string destination = "今天", string caption = null)
         {
             Title = "拾序提醒"; Width = 360; SizeToContent = SizeToContent.Height; WindowStyle = WindowStyle.None;
             AllowsTransparency = true; Background = Brushes.Transparent; ShowInTaskbar = false; ShowActivated = false; Topmost = true; Ui.Icon(this);
             var panel = new StackPanel();
             var header = new DockPanel(); var close = Ui.Button("×", () => Close(), "Quiet"); close.ToolTip = "关闭提醒"; close.Padding = new Thickness(6, 0, 6, 0); DockPanel.SetDock(close, Dock.Right); header.Children.Add(close);
-            header.Children.Add(Ui.Text(items.Count == 1 ? "拾序 · 到点提醒" : "拾序 · " + items.Count + " 件待办到点", 14, "Accent", true)); panel.Children.Add(header);
+            header.Children.Add(Ui.Text(caption ?? (items.Count == 1 ? "拾序 · 到点提醒" : "拾序 · " + items.Count + " 件待办到点"), 14, "Accent", true)); panel.Children.Add(header);
             foreach (var item in items.Take(3))
             {
                 var title = Ui.Text((item.Important ? "★ " : "") + item.Title, 15, "Text", true); title.Margin = new Thickness(0, 12, 0, 4); title.MaxHeight = 44; panel.Children.Add(title);
@@ -170,7 +170,7 @@ namespace DeskTodo
             }
             var hint = Ui.Text(items.Count > 3 ? "还有 " + (items.Count - 3) + " 件，点击查看全部" : "点击查看 · 8 秒后收起", 11, "Muted"); hint.Margin = new Thickness(0, 14, 0, 0); panel.Children.Add(hint);
             var card = Ui.Card(panel, new Thickness(18)); card.Margin = new Thickness(4); Content = card;
-            card.MouseLeftButtonUp += (s, e) => { app.ShowMain(); app.Main.SelectPage("今天"); Close(); };
+            card.MouseLeftButtonUp += (s, e) => { app.ShowMain(); app.Main.SelectPage(destination); Close(); };
             dismiss = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
             dismiss.Tick += (s, e) => Close();
             MouseEnter += (s, e) => dismiss.Stop(); MouseLeave += (s, e) => dismiss.Start();

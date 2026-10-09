@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
 
 namespace DeskTodo
 {
@@ -60,7 +60,7 @@ namespace DeskTodo
         }
     }
 
-    public class AppController
+    public partial class AppController
     {
         public DataStore Store { get; private set; }
         public AppSettings Settings { get; private set; }
@@ -155,6 +155,7 @@ namespace DeskTodo
                 }
             };
             timer.Start();
+            StartFocusClock();
             if (!TestMode) CheckReminders(DateTime.Now);
         }
         public bool EnsureOccurrences(DateTime through)
@@ -300,13 +301,15 @@ namespace DeskTodo
         }
         public void Import(string path)
         {
-            try { var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Items = imported.Items; state.Series = imported.Series; }); deleted = null; Refresh(); }
+            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
             catch (Exception ex) { Error("导入失败", ex); }
         }
         public void Exit()
         {
             if (Exiting) return;
+            if (!PauseFocus()) return;
             Exiting = true;
+            StopFocusClock();
             if (timer != null) timer.Stop();
             if (ReminderPopup != null) ReminderPopup.Close();
             if (tray != null) { tray.Visible = false; tray.Dispose(); }

@@ -18,6 +18,7 @@ namespace DeskTodo
         readonly StackPanel tools = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         readonly Dictionary<string, Button> navigation = new Dictionary<string, Button>();
         readonly Button widgetToggle;
+        FocusPanel focusPanel;
         string page = "月历";
         bool showCompleted = true;
         DateTime selected = DateTime.Today;
@@ -42,7 +43,7 @@ namespace DeskTodo
             var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 36) };
             var badge = new Image { Source = Icon, Width = 32, Height = 32 }; brand.Children.Add(badge);
             var name = Ui.Text("拾序", 20, "Text", true); name.Margin = new Thickness(10, 2, 0, 0); brand.Children.Add(name); nav.Children.Add(brand);
-            string[] keys = { "今天", "全部", "月历" }, icons = { "☀", "☷", "▦" };
+            string[] keys = { "今天", "全部", "月历", "番茄钟" }, icons = { "☀", "☷", "▦", "◷" };
             for (int n = 0; n < keys.Length; n++)
             {
                 string key = keys[n]; var b = Ui.Button(icons[n] + "   " + key, () => SelectPage(key), "Quiet"); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Padding = new Thickness(14, 12, 10, 12); b.Margin = new Thickness(0, 0, 0, 8); navigation[key] = b; nav.Children.Add(b);
@@ -55,6 +56,7 @@ namespace DeskTodo
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; Refresh(); }
+        public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); }
         public void SelectDay(DateTime date) { app.EnsureOccurrences(new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))); selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
         public void Refresh()
         {
@@ -78,13 +80,15 @@ namespace DeskTodo
                 AddTool("本月", () => SelectDay(DateTime.Today));
                 AddTool("›", () => SelectDay(Month.AddMonths(1)), 32);
             }
+            else if (page == "番茄钟") { heading.Text = "番茄钟"; subtitle.Text = "给这段时间一个名字，专心学完这一轮"; }
             else { heading.Text = page == "今天" ? "今天" : "全部待办"; subtitle.Text = page == "今天" ? DateTime.Today.ToString("M月d日 dddd") : "有日期与无日期的待办都在这里"; }
             Button theme = null; theme = Ui.Button("换肤", () => app.ThemeMenu(theme)); theme.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(theme);
-            var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add);
+            if (page != "番茄钟") { var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
-            if (page == "月历") RenderCalendar(); else RenderList();
+            if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
+            else if (page == "月历") RenderCalendar(); else RenderList();
             int pending = app.Store.State.Items.Count(i => !i.Done);
-            status.Text = "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
+            status.Text = page == "番茄钟" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
         }
         void AddTool(string text, Action action, double width = 0)
         {
