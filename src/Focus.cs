@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -22,7 +22,7 @@ namespace DeskTodo
         public bool FocusRunning { get { return focusWatch != null && focusWatch.IsRunning; } }
         public double FocusSeconds
         {
-            get { var focus = Store.State.ActiveFocus; return focus == null ? 0 : Math.Min(focus.TargetSeconds, focus.FocusedSeconds + PendingFocusSeconds); }
+            get { var focus = Store.State.ActiveFocus; return focus == null ? 0 : focus.IsCountUp ? focus.FocusedSeconds + PendingFocusSeconds : Math.Min(focus.TargetSeconds, focus.FocusedSeconds + PendingFocusSeconds); }
         }
         double PendingFocusSeconds { get { return focusWatch == null ? 0 : Math.Max(0, focusWatch.Elapsed.TotalSeconds - focusCheckpointed); } }
         public FocusSession FocusSnapshot()
@@ -48,9 +48,9 @@ namespace DeskTodo
             if (focusPowerHandler != null) { SystemEvents.PowerModeChanged -= focusPowerHandler; focusPowerHandler = null; }
         }
         void BeginFocusRun() { focusSegmentStart = DateTimeOffset.Now; focusCheckpointed = 0; focusWatch = Stopwatch.StartNew(); }
-        public bool StartFocus(string title, int minutes)
+        public bool StartFocus(string title, int minutes, bool countUp = false)
         {
-            try { Store.ChangeState(state => Study.Start(state, title, minutes, DateTimeOffset.Now)); BeginFocusRun(); Main.RefreshFocus(); return true; }
+            try { Store.ChangeState(state => Study.Start(state, title, minutes, DateTimeOffset.Now, countUp)); BeginFocusRun(); Main.RefreshFocus(); return true; }
             catch (Exception ex) { if (TestMode) throw; Error("开始学习失败", ex); return false; }
         }
         bool SaveFocusProgress()
@@ -102,7 +102,7 @@ namespace DeskTodo
             var focus = Store.State.ActiveFocus;
             if (focus != null && FocusRunning)
             {
-                if (FocusSeconds >= focus.TargetSeconds) FinishFocus(true);
+                if (!focus.IsCountUp && FocusSeconds >= focus.TargetSeconds) FinishFocus(true);
                 else if (focusWatch.Elapsed.TotalSeconds - focusCheckpointed >= 5 && !SaveFocusProgress()) focusWatch.Stop();
             }
             Main.RefreshFocus();
@@ -114,6 +114,8 @@ namespace DeskTodo
         readonly AppController app;
         readonly TextBox name = new TextBox { MaxLength = 200, ToolTip = "例如：阅读论文、复习英语" };
         readonly TextBox minutes = new TextBox { Text = "25", Width = 90, MaxLength = 3 };
+        readonly ComboBox mode = new ComboBox { ItemsSource = new[] { "倒计时", "正向计时" }, SelectedIndex = 0, Height = 36 };
+        readonly StackPanel durationRow = new StackPanel { Orientation = Orientation.Horizontal };
         readonly TextBlock countdown = Ui.Text("25:00", 66, "Accent", true);
         readonly TextBlock phase = Ui.Text("准备开始", 13, "Muted");
         readonly TextBlock dayLabel = Ui.Text("", 12, "Muted");
@@ -129,16 +131,16 @@ namespace DeskTodo
             ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var timerPanel = new StackPanel(); timerPanel.Children.Add(Ui.Text("这次学什么", 18, "Text", true));
             name.Margin = new Thickness(0, 16, 0, 16); AutomationProperties.SetName(name, "学习名称"); timerPanel.Children.Add(name);
-            var duration = new StackPanel { Orientation = Orientation.Horizontal };
-            var label = Ui.Text("专注时长", 13, "Muted"); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 12, 0); duration.Children.Add(label);
-            AutomationProperties.SetName(minutes, "学习分钟"); duration.Children.Add(minutes);
-            var unit = Ui.Text("分钟 · 1–720", 12, "Muted"); unit.Margin = new Thickness(12, 0, 0, 0); unit.VerticalAlignment = VerticalAlignment.Center; duration.Children.Add(unit); timerPanel.Children.Add(duration);
+            AutomationProperties.SetName(mode, "学习计时模式"); mode.Margin = new Thickness(0, 0, 0, 14); timerPanel.Children.Add(mode);
+            var label = Ui.Text("专注时长", 13, "Muted"); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 12, 0); durationRow.Children.Add(label);
+            AutomationProperties.SetName(minutes, "学习分钟"); durationRow.Children.Add(minutes);
+            var unit = Ui.Text("分钟 · 1–720", 12, "Muted"); unit.Margin = new Thickness(12, 0, 0, 0); unit.VerticalAlignment = VerticalAlignment.Center; durationRow.Children.Add(unit); timerPanel.Children.Add(durationRow);
             countdown.FontFamily = new FontFamily("Consolas"); countdown.HorizontalAlignment = HorizontalAlignment.Center; countdown.Margin = new Thickness(0, 38, 0, 8); AutomationProperties.SetName(countdown, "学习倒计时"); timerPanel.Children.Add(countdown);
             phase.HorizontalAlignment = HorizontalAlignment.Center; phase.Margin = new Thickness(0, 0, 0, 26); timerPanel.Children.Add(phase);
             var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            start = Ui.Button("开始学习", () => { int value; if (!Int32.TryParse(minutes.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out value) || value < 1 || value > 720 || String.IsNullOrWhiteSpace(name.Text)) { phase.Text = "请填写名称和 1–720 分钟的时长"; return; } app.StartFocus(name.Text, value); }, "Primary"); controls.Children.Add(start);
+            start = Ui.Button("开始学习", () => { int value = 0; bool countUp = mode.SelectedIndex == 1; if (String.IsNullOrWhiteSpace(name.Text) || (!countUp && (!Int32.TryParse(minutes.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out value) || value < 1 || value > 720))) { phase.Text = countUp ? "请填写学习名称" : "请填写名称和 1–720 分钟的时长"; return; } app.StartFocus(name.Text, value, countUp); }, "Primary"); controls.Children.Add(start);
             pause = Ui.Button("暂停", () => { if (app.FocusRunning) app.PauseFocus(); else app.ResumeFocus(); }); pause.Margin = new Thickness(10, 0, 0, 0); controls.Children.Add(pause); timerPanel.Children.Add(controls);
-            finish = Ui.Button("结束并记录", () => app.FinishFocus(false), "Quiet"); finish.HorizontalAlignment = HorizontalAlignment.Center; finish.Margin = new Thickness(0, 12, 0, 0); timerPanel.Children.Add(finish);
+            finish = Ui.Button("结束并记录", () => app.FinishFocus(app.Store.State.ActiveFocus != null && app.Store.State.ActiveFocus.IsCountUp), "Quiet"); finish.HorizontalAlignment = HorizontalAlignment.Center; finish.Margin = new Thickness(0, 12, 0, 0); timerPanel.Children.Add(finish);
             var hint = Ui.Text("暂停时间不计入学习时长。关闭主窗口仍计时，彻底退出或休眠时暂停。", 11, "Muted"); hint.Margin = new Thickness(0, 24, 0, 0); timerPanel.Children.Add(hint);
             var timerCard = Ui.Card(Ui.Scroll(timerPanel), new Thickness(24)); timerCard.Margin = new Thickness(0, 0, 20, 0); Children.Add(timerCard);
             var stats = new DockPanel(); var summary = new StackPanel { Margin = new Thickness(0, 0, 0, 20) }; DockPanel.SetDock(summary, Dock.Top); stats.Children.Add(summary);
@@ -148,18 +150,19 @@ namespace DeskTodo
             summary.Children.Add(Ui.Text("学习记录", 14, "Text", true)); summary.Children.Add(Ui.Text("按实际计时统计；进行中的时长也计入累计。", 11, "Muted"));
             stats.Children.Add(Ui.Scroll(history)); var statsCard = Ui.Card(stats, new Thickness(22)); Grid.SetColumn(statsCard, 1); Children.Add(statsCard);
             minutes.TextChanged += (s, e) => { if (app.Store.State.ActiveFocus == null) { int value; if (Int32.TryParse(minutes.Text, out value) && value >= 1 && value <= 720) countdown.Text = Study.FormatDuration(value * 60); } };
+            mode.SelectionChanged += (s, e) => Refresh();
             Refresh();
         }
         public void Refresh(bool forceHistory = false)
         {
             if (forceHistory) historyKey = null;
             var active = app.Store.State.ActiveFocus;
-            if (active != null && (shownSession != active.Id || forceHistory)) { name.Text = active.Title; minutes.Text = (active.TargetSeconds / 60).ToString(); shownSession = active.Id; }
+            if (active != null && (shownSession != active.Id || forceHistory)) { shownSession = active.Id; name.Text = active.Title; if (!active.IsCountUp) minutes.Text = (active.TargetSeconds / 60).ToString(); mode.SelectedIndex = active.IsCountUp ? 1 : 0; }
             if (active == null) shownSession = null;
-            name.IsEnabled = minutes.IsEnabled = active == null; start.IsEnabled = active == null; pause.IsEnabled = finish.IsEnabled = active != null;
+            name.IsEnabled = minutes.IsEnabled = mode.IsEnabled = active == null; start.IsEnabled = active == null; pause.IsEnabled = finish.IsEnabled = active != null; durationRow.Visibility = mode.SelectedIndex == 1 ? Visibility.Collapsed : Visibility.Visible;
             pause.Content = active == null || app.FocusRunning ? "暂停" : "继续"; AutomationProperties.SetName(pause, pause.Content.ToString());
-            if (active != null) { countdown.Text = Study.FormatDuration(Math.Ceiling(Math.Max(0, active.TargetSeconds - app.FocusSeconds))); phase.Text = app.FocusRunning ? "专注中 · 一次只做一件事" : "已暂停 · 可继续本次学习"; }
-            else { int value; countdown.Text = Study.FormatDuration(Int32.TryParse(minutes.Text, out value) && value > 0 && value <= 720 ? value * 60 : 0); phase.Text = "准备开始"; }
+            if (active != null) { countdown.Text = Study.FormatDuration(active.IsCountUp ? app.FocusSeconds : Math.Ceiling(Math.Max(0, active.TargetSeconds - app.FocusSeconds))); phase.Text = app.FocusRunning ? active.IsCountUp ? "正向计时中 · 随时结束并记录" : "专注中 · 一次只做一件事" : "已暂停 · 可继续本次学习"; }
+            else { int value; countdown.Text = Study.FormatDuration(mode.SelectedIndex == 0 && Int32.TryParse(minutes.Text, out value) && value > 0 && value <= 720 ? value * 60 : 0); phase.Text = mode.SelectedIndex == 1 ? "无需预设时长，从 00:00 开始" : "准备开始"; }
             var today = DateTime.Today; dayLabel.Text = today.ToString("M月d日 dddd");
             var records = app.Store.State.FocusHistory.Where(f => Study.SecondsOn(f, today) > 0 || DateTimeOffset.ParseExact(f.EndedAt, "o", CultureInfo.InvariantCulture).Date == today).ToList();
             double seconds = records.Sum(f => Study.SecondsOn(f, today)); var current = app.FocusSnapshot(); if (current != null) seconds += Study.SecondsOn(current, today);
@@ -173,7 +176,7 @@ namespace DeskTodo
             foreach (var record in records.OrderByDescending(f => DateTimeOffset.ParseExact(f.StartedAt, "o", CultureInfo.InvariantCulture)))
             {
                 var row = new StackPanel(); row.Children.Add(Ui.Text(record.Title, 14, "Text", true));
-                var duration = Ui.Text("今日 " + Study.FormatDuration(Study.SecondsOn(record, today)) + "  ·  计划 " + (record.TargetSeconds / 60) + " 分钟", 12, "Muted"); duration.Margin = new Thickness(0, 6, 0, 4); row.Children.Add(duration);
+                var duration = Ui.Text("今日 " + Study.FormatDuration(Study.SecondsOn(record, today)) + (record.IsCountUp ? "  ·  正向计时" : "  ·  计划 " + (record.TargetSeconds / 60) + " 分钟"), 12, "Muted"); duration.Margin = new Thickness(0, 6, 0, 4); row.Children.Add(duration);
                 var from = DateTimeOffset.ParseExact(record.StartedAt, "o", CultureInfo.InvariantCulture); var to = DateTimeOffset.ParseExact(record.EndedAt, "o", CultureInfo.InvariantCulture);
                 row.Children.Add(Ui.Text(from.ToString("M/d HH:mm") + " – " + to.ToString("M/d HH:mm") + "  ·  " + (record.Completed ? "已完成" : "提前结束"), 11, record.Completed ? "Accent" : "Muted"));
                 var card = Ui.Card(row, new Thickness(14)); card.Margin = new Thickness(0, 0, 0, 10); history.Children.Add(card);

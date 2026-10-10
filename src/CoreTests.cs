@@ -17,6 +17,13 @@ class CoreTests
         try
         {
             var study = new TodoState();
+            var openStudy = new TodoState(); var openStart = new DateTimeOffset(2026, 10, 9, 9, 0, 0, TimeSpan.FromHours(8));
+            Study.Start(openStudy, "自由阅读", 0, openStart, true); Study.AddTime(openStudy, openStart, 50000);
+            Check(openStudy.ActiveFocus.TargetSeconds == 0 && openStudy.ActiveFocus.FocusedSeconds == 50000, "count-up focus has no planned duration and is not clamped at twelve hours");
+            openStudy.Validate(); Study.Finish(openStudy, openStart.AddSeconds(50000), true);
+            Check(openStudy.FocusHistory[0].Completed && Study.Summarize(openStudy.FocusHistory, openStart.Date, openStart.Date).TotalSeconds == 50000, "ending count-up records a completed session with actual time");
+            string openPath = Path.Combine(root, "count-up.json"); JsonFile.Write(openPath, openStudy);
+            Check(DataStore.ReadState(openPath).FocusHistory[0].TargetSeconds == 0, "count-up mode survives serialization");
             var studyStart = new DateTimeOffset(2026, 10, 9, 23, 55, 0, TimeSpan.FromHours(8));
             Study.Start(study, "阅读论文", 25, studyStart);
             Study.AddTime(study, studyStart, 300);
@@ -137,10 +144,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 4 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 5 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 4, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 5, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");

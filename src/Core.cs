@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -29,7 +29,7 @@ namespace DeskTodo
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 4;
+        [DataMember(IsRequired = true)] public int Version = 5;
         [DataMember(IsRequired = true)] public List<TodoItem> Items = new List<TodoItem>();
         [DataMember] public List<RepeatSeries> Series = new List<RepeatSeries>();
         [DataMember] public List<FocusSession> FocusHistory = new List<FocusSession>();
@@ -38,7 +38,7 @@ namespace DeskTodo
         public TodoState Copy() { return new TodoState { Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
         public void Validate()
         {
-            if (Version < 1 || Version > 4) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version < 1 || Version > 5) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
             if (FocusHistory == null || FocusHistory.Count > 10000) throw new InvalidDataException("学习记录无效或超过 10000 次，请先导出备份。");
             var focusIds = new HashSet<string>();
             foreach (var focus in FocusHistory) { if (focus == null || !focusIds.Add(focus.Id)) throw new InvalidDataException("学习记录重复或无效。"); focus.Validate(false); }
@@ -89,35 +89,36 @@ namespace DeskTodo
         [DataMember] public bool Completed;
         [DataMember(IsRequired = true)] public List<FocusSlice> Slices = new List<FocusSlice>();
         public double FocusedSeconds { get { return Slices.Sum(s => s.Seconds); } }
+        public bool IsCountUp { get { return TargetSeconds == 0; } }
         public FocusSession Copy() { return new FocusSession { Id = Id, Title = Title, TargetSeconds = TargetSeconds, StartedAt = StartedAt, EndedAt = EndedAt, Completed = Completed, Slices = Slices.Select(s => s.Copy()).ToList() }; }
         public void Validate(bool active)
         {
             Guid id; DateTimeOffset parsed;
-            if (!Guid.TryParse(Id, out id) || String.IsNullOrWhiteSpace(Title) || Title.Length > 200 || TargetSeconds < 60 || TargetSeconds > 43200 || !DateTimeOffset.TryParseExact(StartedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed) || Slices == null || Slices.Count > 2000) throw new InvalidDataException("学习记录的名称、时间或时长无效。");
+            if (!Guid.TryParse(Id, out id) || String.IsNullOrWhiteSpace(Title) || Title.Length > 200 || (TargetSeconds != 0 && (TargetSeconds < 60 || TargetSeconds > 43200)) || !DateTimeOffset.TryParseExact(StartedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed) || Slices == null || Slices.Count > 2000) throw new InvalidDataException("学习记录的名称、时间或时长无效。");
             foreach (var slice in Slices)
             {
-                if (slice == null || Double.IsNaN(slice.Seconds) || Double.IsInfinity(slice.Seconds) || slice.Seconds <= 0 || slice.Seconds > TargetSeconds || !DateTimeOffset.TryParseExact(slice.StartedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("学习计时片段无效。");
+                if (slice == null || Double.IsNaN(slice.Seconds) || Double.IsInfinity(slice.Seconds) || slice.Seconds <= 0 || (slice.Seconds > TimeSpan.MaxValue.TotalSeconds || (TargetSeconds > 0 && slice.Seconds > TargetSeconds)) || !DateTimeOffset.TryParseExact(slice.StartedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("学习计时片段无效。");
                 try { parsed.AddTicks((long)Math.Ceiling(slice.Seconds * TimeSpan.TicksPerSecond)); } catch (ArgumentOutOfRangeException) { throw new InvalidDataException("学习计时片段超出日期范围。"); }
             }
-            if (FocusedSeconds > TargetSeconds + 0.000001 || (active && (EndedAt != null || Completed)) || (!active && !DateTimeOffset.TryParseExact(EndedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) || (Completed && FocusedSeconds < TargetSeconds - 0.000001)) throw new InvalidDataException("学习记录状态无效。");
+            if ((FocusedSeconds > TimeSpan.MaxValue.TotalSeconds || (TargetSeconds > 0 && FocusedSeconds > TargetSeconds + 0.000001)) || (active && (EndedAt != null || Completed)) || (!active && !DateTimeOffset.TryParseExact(EndedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) || (Completed && FocusedSeconds < TargetSeconds - 0.000001)) throw new InvalidDataException("学习记录状态无效。");
         }
     }
 
     public static class Study
     {
-        public static void Start(TodoState state, string title, int minutes, DateTimeOffset now)
+        public static void Start(TodoState state, string title, int minutes, DateTimeOffset now, bool countUp = false)
         {
             if (state.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习。");
-            if (String.IsNullOrWhiteSpace(title) || title.Trim().Length > 200 || minutes < 1 || minutes > 720) throw new InvalidDataException("请填写学习名称和 1 至 720 分钟的时长。");
+            if (String.IsNullOrWhiteSpace(title) || title.Trim().Length > 200 || (!countUp && (minutes < 1 || minutes > 720))) throw new InvalidDataException("请填写学习名称和 1 至 720 分钟的时长。");
             if (state.FocusHistory.Count >= 10000) throw new InvalidDataException("学习记录已达 10000 次，请先导出备份。");
-            state.ActiveFocus = new FocusSession { Id = Guid.NewGuid().ToString("N"), Title = title.Trim(), TargetSeconds = minutes * 60, StartedAt = now.ToString("o", CultureInfo.InvariantCulture) };
+            state.ActiveFocus = new FocusSession { Id = Guid.NewGuid().ToString("N"), Title = title.Trim(), TargetSeconds = countUp ? 0 : minutes * 60, StartedAt = now.ToString("o", CultureInfo.InvariantCulture) };
         }
         public static void AddTime(TodoState state, DateTimeOffset segmentStart, double seconds)
         {
             if (state.ActiveFocus == null) throw new InvalidOperationException("没有进行中的学习。");
             if (Double.IsNaN(seconds) || Double.IsInfinity(seconds) || seconds < 0) throw new InvalidDataException("计时时长无效。");
             var focus = state.ActiveFocus;
-            double add = Math.Min(seconds, Math.Max(0, focus.TargetSeconds - focus.FocusedSeconds));
+            double add = focus.IsCountUp ? seconds : Math.Min(seconds, Math.Max(0, focus.TargetSeconds - focus.FocusedSeconds));
             if (add <= 0) return;
             string start = segmentStart.ToString("o", CultureInfo.InvariantCulture);
             var last = focus.Slices.LastOrDefault();
@@ -128,7 +129,7 @@ namespace DeskTodo
         {
             if (state.ActiveFocus == null) throw new InvalidOperationException("没有进行中的学习。");
             var focus = state.ActiveFocus;
-            if (completed && focus.FocusedSeconds < focus.TargetSeconds - 0.000001) throw new InvalidOperationException("倒计时尚未结束。");
+            if (completed && !focus.IsCountUp && focus.FocusedSeconds < focus.TargetSeconds - 0.000001) throw new InvalidOperationException("倒计时尚未结束。");
             focus.EndedAt = now.ToString("o", CultureInfo.InvariantCulture); focus.Completed = completed;
             state.FocusHistory.Add(focus); state.ActiveFocus = null;
         }
@@ -168,7 +169,7 @@ namespace DeskTodo
             }
             return report;
         }
-        public static string FormatDuration(double seconds) { int value = (int)Math.Max(0, Math.Floor(seconds)); return (value / 60).ToString("D2") + ":" + (value % 60).ToString("D2"); }
+        public static string FormatDuration(double seconds) { long value = (long)Math.Max(0, Math.Floor(seconds)); return (value / 60).ToString("D2") + ":" + (value % 60).ToString("D2"); }
     }
 
     public class StudyReport
@@ -354,7 +355,7 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 4; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 5; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
         public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -55,7 +55,7 @@ namespace DeskTodo
         }
         static Grid TwoColumns() { var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition()); return grid; }
         static Border Metric(string caption, TextBlock value) { var panel = new StackPanel(); panel.Children.Add(Ui.Text(caption, 11, "Muted")); value.Margin = new Thickness(0, 6, 0, 0); panel.Children.Add(value); var card = Ui.Card(panel, new Thickness(15, 12, 15, 12)); card.Margin = new Thickness(0, 0, 8, 0); return card; }
-        static string Duration(double seconds) { int value = (int)Math.Floor(seconds); return value >= 3600 ? (value / 3600) + " 小时 " + ((value % 3600) / 60) + " 分" : value >= 60 ? (value / 60) + " 分 " + (value % 60) + " 秒" : value + " 秒"; }
+        static string Duration(double seconds) { long value = (long)Math.Floor(seconds); return value >= 3600 ? (value / 3600) + " 小时 " + ((value % 3600) / 60) + " 分" : value >= 60 ? (value / 60) + " 分 " + (value % 60) + " 秒" : value + " 秒"; }
         public void Refresh(bool force = false)
         {
             if (lastToday != DateTime.Today)
@@ -134,7 +134,7 @@ namespace DeskTodo
             if (matches.Count == 0) Ui.Empty(records, "这一天没有匹配的记录", "可选择其他日期，或清除名称与状态筛选");
             foreach (var focus in matches.Take(recordLimit))
             {
-                var panel = new StackPanel(); panel.Children.Add(Ui.Text(focus.Title, 13, "Text", true)); var duration = Ui.Text("当天 " + Duration(Study.SecondsOn(focus, day)) + " · 计划 " + (focus.TargetSeconds / 60) + " 分", 11, "Muted"); duration.Margin = new Thickness(0, 5, 0, 4); panel.Children.Add(duration);
+                var panel = new StackPanel(); panel.Children.Add(Ui.Text(focus.Title, 13, "Text", true)); var duration = Ui.Text("当天 " + Duration(Study.SecondsOn(focus, day)) + (focus.IsCountUp ? " · 正向计时" : " · 计划 " + (focus.TargetSeconds / 60) + " 分"), 11, "Muted"); duration.Margin = new Thickness(0, 5, 0, 4); panel.Children.Add(duration);
                 var from = DateTimeOffset.ParseExact(focus.StartedAt, "o", CultureInfo.InvariantCulture); string ended = focus.EndedAt == null ? "" : DateTimeOffset.ParseExact(focus.EndedAt, "o", CultureInfo.InvariantCulture).ToString("M/d HH:mm");
                 panel.Children.Add(Ui.Text(from.ToString("M/d HH:mm") + (ended == "" ? "" : " – " + ended) + " · " + (focus.EndedAt == null ? app.FocusRunning ? "进行中" : "已暂停" : focus.Completed ? "已完成" : "提前结束"), 10, focus.Completed ? "Accent" : "Muted"));
                 var card = Ui.Card(panel, new Thickness(12)); card.Margin = new Thickness(0, 0, 0, 8); records.Children.Add(card);

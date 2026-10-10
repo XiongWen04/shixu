@@ -300,6 +300,17 @@ namespace DeskTodo
                 Capture(app.ReminderPopup, Path.Combine(root, "focus-notification.png")); app.ReminderPopup.Close();
                 app.FocusTick();
                 Check(app.Store.State.FocusHistory.Count == 2, "completed focus is not recorded twice");
+                var modeChoice = Controls<ComboBox>(app.Main).First(c => AutomationProperties.GetName(c) == "学习计时模式"); modeChoice.SelectedIndex = 1;
+                Check(Controls<TextBlock>(app.Main).First(t => AutomationProperties.GetName(t) == "学习倒计时").Text == "00:00", "count-up starts at zero without a duration");
+                studyName.Text = "自由学习";
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "开始学习").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                for (int tick = 0; tick < 10; tick++) Pump();
+                Check(app.FocusRunning && app.Store.State.ActiveFocus.IsCountUp && app.FocusSeconds > 1 && Controls<TextBlock>(app.Main).First(t => AutomationProperties.GetName(t) == "学习倒计时").Text != "00:00", "count-up increases on screen and never finishes at zero target");
+                app.PauseFocus(); double openSeconds = app.FocusSeconds; Pump(); Check(Math.Abs(app.FocusSeconds - openSeconds) < 0.001, "count-up pause excludes paused time");
+                app.ResumeFocus(); Pump(); Capture(app.Main, Path.Combine(root, "focus-count-up.png"));
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "结束并记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Store.State.ActiveFocus == null && app.Store.State.FocusHistory.Last().IsCountUp && app.Store.State.FocusHistory.Last().Completed && app.Store.State.FocusHistory.Last().FocusedSeconds >= openSeconds, "count-up manual ending records a completed session with actual time");
+                if (app.ReminderPopup != null) app.ReminderPopup.Close(); modeChoice.SelectedIndex = 0;
                 app.Store.ChangeState(state =>
                 {
                     state.FocusHistory.Clear();

@@ -4,13 +4,13 @@
 
 拾序是一款面向个人使用的 Windows 原生待办与学习专注软件。用月历安排事情，用桌面小组件查看任务，用番茄钟记录学习，再通过图表回顾时间分配。数据保存在本机，无需登录。
 
-当前版本：**v1.6.1**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
+当前版本：**v1.7.0**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
 
 [下载 Windows x64 便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
 ## 快速开始
 
-1. [下载 v1.6.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.6.1/Shixu-v1.6.1-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
+1. [下载 v1.7.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.7.0/Shixu-v1.7.0-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
 2. 需要安排事情时，点击“添加”，填写标题、日期、时间和地点；按需开启提醒、重复或重要标记。
 3. 需要学习时，左侧打开“番茄钟”，填写学习名称与分钟数，点击“开始学习”。
 4. 学习结束后查看右侧“今日学习”；点击右上角“学习统计”，查看图表及历史记录。
@@ -29,7 +29,7 @@
 
 ## 界面预览
 
-以下为 v1.6.1 实际运行截图，任务内容均为示例。日期随截图时的系统日期显示。
+以下为当前版本实际运行截图，任务内容均为示例。日期随截图时的系统日期显示。
 
 主窗口只在系统标题栏保留图标与名称，侧栏直接显示导航，减少重复品牌展示。
 
@@ -112,6 +112,10 @@
 
 ## 番茄钟与学习记录
 
+v1.7.0 增加**正向计时**：选择该模式，只填写名称，从00:00开始累计，无需预设时长。支持暂停、继续，点击“结束并记录”后保存为已完成学习，实际时长照常计入今日面板、图表和排行。
+
+![正向计时](docs/screenshots/focus-count-up.png)
+
 左侧打开“番茄钟”，填写名称和时长（1–720 分钟，默认 25 分钟）后开始学习。可暂停、继续或提前结束；到点自动记录并显示右下角小通知。
 
 ![番茄钟与今日学习面板](docs/screenshots/focus-dashboard.png)
@@ -146,7 +150,7 @@
 
 便携版解压后运行 `拾序.exe`，并保留旁边的 `拾序.exe.config`。关闭主窗口只会隐藏主窗口；彻底退出请在托盘菜单中选择“退出”。
 
-从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.6.1-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
+从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.7.0-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
 
 ### 第一次使用
 
@@ -206,7 +210,7 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 
 保存使用临时文件及原子替换，并保留 `tasks.json.bak`。读取失败不会把损坏文件当成空清单覆盖。导入会校验文件，并在替换前要求确认。
 
-支持读取 v1/v2/v3/v4 格式，修改后保存为 v4。v1.5.0 及以上可读取 v4，v1.4.0 及更早版本无法读取；升级前请备份。
+支持读取 v1/v2/v3/v4/v5 格式，保存为 v5。正向计时使用 v5 格式，v1.6.1 及更早版本无法读取；升级前请备份。
 
 个人数据、设置、备份、编译结果和开发临时目录均由 `.gitignore` 排除。**不要把整个运行目录或个人数据手动拖入 GitHub 上传页面。**
 
@@ -256,6 +260,7 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 
 | 版本 | 主要变化 |
 | --- | --- |
+| v1.7.0 | 正向计时，无需预设时长，记录与统计兼容 |
 | [v1.6.1](https://github.com/XiongWen04/shixu/releases/tag/v1.6.1) | 去掉侧栏重复图标与名称，增加保存进度后退出的控制入口 |
 | [v1.6.0](https://github.com/XiongWen04/shixu/releases/tag/v1.6.0) | 7天柱状图、30天热力图、学习排行、历史日期与名称/状态筛选 |
 | [v1.5.0](https://github.com/XiongWen04/shixu/releases/tag/v1.5.0) | 自定义番茄钟、暂停继续、到点通知和今日学习记录 |
