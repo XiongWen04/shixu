@@ -119,18 +119,25 @@ namespace DeskTodo
             }
             catch (DllNotFoundException) {} catch (EntryPointNotFoundException) {}
         }
-        public static void RegisterActivation(Window window, string root, Action show)
+        public static void RegisterActivation(Window window, string root, Action show, Action exit)
         {
             uint message = RegisterWindowMessage("DeskTodo.Show." + Program.Hash(root));
+            uint exitMessage = RegisterWindowMessage("DeskTodo.Exit." + Program.Hash(root));
             HwndSource.FromHwnd(Handle(window)).AddHook((IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam, ref bool handled) =>
             {
                 if (msg == message) { window.Dispatcher.BeginInvoke(show); handled = true; }
+                if (msg == exitMessage) { window.Dispatcher.BeginInvoke(exit); handled = true; }
                 return IntPtr.Zero;
             });
         }
         public static void ActivateMain(string root)
         {
             uint message = RegisterWindowMessage("DeskTodo.Show." + Program.Hash(root));
+            PostMessage(new IntPtr(0xffff), message, IntPtr.Zero, IntPtr.Zero);
+        }
+        public static void RequestExit(string root)
+        {
+            uint message = RegisterWindowMessage("DeskTodo.Exit." + Program.Hash(root));
             PostMessage(new IntPtr(0xffff), message, IntPtr.Zero, IntPtr.Zero);
         }
     }

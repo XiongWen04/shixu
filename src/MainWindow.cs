@@ -30,7 +30,7 @@ namespace DeskTodo
             app = controller; Title = "拾序"; Width = 1160; Height = 790; MinWidth = 960; MinHeight = 650;
             WindowStartupLocation = WindowStartupLocation.CenterScreen; Ui.Icon(this);
             Month = new DateTime(selected.Year, selected.Month, 1);
-            SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain); };
+            SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain, app.Exit); };
             Closing += (s, e) => { if (!app.Exiting) { e.Cancel = true; Hide(); } };
             PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
             var layout = new Grid(); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
@@ -41,9 +41,6 @@ namespace DeskTodo
             var settings = Ui.Button("⚙  设置", () => { var window = new SettingsWindow(app) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner }; window.ShowDialog(); }, "Quiet"); settings.HorizontalContentAlignment = HorizontalAlignment.Left; footer.Children.Add(settings);
             var offline = Ui.Text("离线使用 · 自动保存", 10, "Muted"); offline.Margin = new Thickness(12, 18, 0, 0); footer.Children.Add(offline);
             var nav = new StackPanel(); side.Children.Add(nav);
-            var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 36) };
-            var badge = new Image { Source = Icon, Width = 32, Height = 32 }; brand.Children.Add(badge);
-            var name = Ui.Text("拾序", 20, "Text", true); name.Margin = new Thickness(10, 2, 0, 0); brand.Children.Add(name); nav.Children.Add(brand);
             string[] keys = { "今天", "全部", "月历", "番茄钟" }, icons = { "☀", "☷", "▦", "◷" };
             for (int n = 0; n < keys.Length; n++)
             {

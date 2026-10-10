@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
 
 namespace DeskTodo
 {
@@ -26,6 +26,7 @@ namespace DeskTodo
         {
             Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("zh-CN");
             Thread.CurrentThread.CurrentUICulture = Thread.CurrentThread.CurrentCulture;
+            if ((args.Length == 1 || args.Length == 2) && args[0] == "--exit") { NativeDesktop.RequestExit(args.Length == 2 ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory); return 0; }
             bool test = args.Length == 2 && args[0] == "--ui-test";
             string root = test ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             Directory.CreateDirectory(root);

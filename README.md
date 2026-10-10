@@ -4,13 +4,13 @@
 
 拾序是一款面向个人使用的 Windows 原生待办与学习专注软件。用月历安排事情，用桌面小组件查看任务，用番茄钟记录学习，再通过图表回顾时间分配。数据保存在本机，无需登录。
 
-当前版本：**v1.6.0**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
+当前版本：**v1.6.1**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
 
 [下载 Windows x64 便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
 ## 快速开始
 
-1. [下载 v1.6.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.6.0/Shixu-v1.6.0-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
+1. [下载 v1.6.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.6.1/Shixu-v1.6.1-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
 2. 需要安排事情时，点击“添加”，填写标题、日期、时间和地点；按需开启提醒、重复或重要标记。
 3. 需要学习时，左侧打开“番茄钟”，填写学习名称与分钟数，点击“开始学习”。
 4. 学习结束后查看右侧“今日学习”；点击右上角“学习统计”，查看图表及历史记录。
@@ -29,7 +29,9 @@
 
 ## 界面预览
 
-以下为 v1.6.0 实际运行截图，任务内容均为示例。日期随截图时的系统日期显示。
+以下为 v1.6.1 实际运行截图，任务内容均为示例。日期随截图时的系统日期显示。
+
+主窗口只在系统标题栏保留图标与名称，侧栏直接显示导航，减少重复品牌展示。
 
 ### 用月历安排一个月
 
@@ -144,7 +146,7 @@
 
 便携版解压后运行 `拾序.exe`，并保留旁边的 `拾序.exe.config`。关闭主窗口只会隐藏主窗口；彻底退出请在托盘菜单中选择“退出”。
 
-从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.6.0-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
+从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.6.1-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
 
 ### 第一次使用
 
@@ -215,15 +217,16 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 ├── README.md
 ├── .gitignore
 ├── .gitattributes
+├── 启动拾序.lnk         # 本机启动入口，忽略
+├── 拾序/               # 本机最新版程序、个人数据与设置，忽略
 ├── src/                # 源码、图标、样式、构建与检查代码
 ├── docs/               # 使用说明
-├── dist/               # 构建输出，忽略
-├── test-results/       # 检查结果，忽略
-├── outputs/            # 本机程序与交付文件，忽略
-└── work/               # 本机历史备份与临时内容，忽略
+└── outputs/            # 最新便携包与校验文件，忽略
 ```
 
-`outputs/` 和 `work/` 是本机保留目录，不属于公开源码。新克隆的仓库不会包含它们。
+本机工作目录可双击 `启动拾序.lnk`；程序和数据保存在 `拾序/`。这些本机文件及 `outputs/` 不属于公开源码，新克隆的仓库不会包含它们。GitHub 用户请下载 Release，解压后运行 `拾序.exe`。
+
+`dist/` 和 `test-results/` 会在执行构建与检查命令时生成，由 `.gitignore` 排除。
 
 `docs/screenshots/` 保存 README 使用的示例界面截图。Release 的便携包只包含可执行文件、运行配置和使用说明，源码通过本仓库下载。
 
@@ -253,6 +256,7 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v1.6.1](https://github.com/XiongWen04/shixu/releases/tag/v1.6.1) | 去掉侧栏重复图标与名称，增加保存进度后退出的控制入口 |
 | [v1.6.0](https://github.com/XiongWen04/shixu/releases/tag/v1.6.0) | 7天柱状图、30天热力图、学习排行、历史日期与名称/状态筛选 |
 | [v1.5.0](https://github.com/XiongWen04/shixu/releases/tag/v1.5.0) | 自定义番茄钟、暂停继续、到点通知和今日学习记录 |
 | [v1.4.0](https://github.com/XiongWen04/shixu/releases/tag/v1.4.0) | 到点提醒、按日历重复待办、重要任务星标 |

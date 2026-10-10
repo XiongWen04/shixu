@@ -379,7 +379,10 @@ namespace DeskTodo
                 IntPtr desktopRoot = GetAncestor(new WindowInteropHelper(app.Widget).Handle, 2);
                 Check(positioned && order.IndexOf(mainHwnd) >= 0 && order.IndexOf(mainHwnd) < order.IndexOf(desktopRoot) && GetAncestor(hit, 2) != desktopRoot, "ordinary windows stack above desktop widget");
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "ALL PASS: " + passed + Environment.NewLine + "Desktop parent: " + NativeDesktop.ParentClass(app.Widget));
-                app.Exit();
+                var exitRequest = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location, "--exit \"" + app.BasePath + "\"") { UseShellExecute = false });
+                Check(exitRequest.WaitForExit(3000), "exit command requester returns without opening another app window"); Pump();
+                Check(app.Exiting, "external exit command closes application through its save-and-exit path");
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "ALL PASS: " + passed + Environment.NewLine + "Graceful exit verified");
             }
             catch (Exception ex)
             {
