@@ -97,6 +97,25 @@ namespace DeskTodo
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(path)) encoder.Save(file);
         }
+        public static void RunCalendar(AppController app, string root)
+        {
+            try
+            {
+                app.Main.SelectDay(new DateTime(2026, 10, 11));
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.UpdateLayout();
+                    var days = Controls<Button>(app.Main).Where(b => b.Style == Application.Current.Resources["CalendarDay"]).ToList();
+                    Check(days.Count == 35, "calendar full weeks " + theme);
+                    Check(days.Take(7).All(b => ((Border)b.Template.FindName("Frame", b)).BorderThickness.Top == 1), "top outside edge is continuous " + theme);
+                    Check(days.Where((b, index) => index % 7 == 0).All(b => ((Border)b.Template.FindName("Frame", b)).BorderThickness.Left == 1), "left outside edge is continuous " + theme);
+                    Check(days.All(b => b.BorderThickness.Right == 1 && b.BorderThickness.Bottom == 1), "right and bottom edges preserved " + theme);
+                    Capture(app.Main, Path.Combine(root, "calendar-" + theme + ".png"));
+                }
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CALENDAR PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void Run(AppController app, string root)
         {
             try

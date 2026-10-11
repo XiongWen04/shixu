@@ -4,13 +4,13 @@
 
 拾序是一款面向个人使用的 Windows 原生待办与学习专注软件。用月历安排事情，用桌面小组件查看任务，用番茄钟记录学习，再通过图表回顾时间分配。数据保存在本机，无需登录。
 
-当前版本：**v1.10.0**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
+当前版本：**v1.10.1**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
 
 [下载 Windows x64 便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
 ## 快速开始
 
-1. [下载 v1.10.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.10.0/Shixu-v1.10.0-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
+1. [下载 v1.10.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.10.1/Shixu-v1.10.1-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
 2. 需要安排事情时，点击“添加”，填写标题、日期、时间和地点；按需开启提醒、重复或重要标记。
 3. 需要学习时，顶部打开“番茄钟”，填写学习名称与分钟数，点击“开始学习”。
 4. 学习结束后查看底部“今日学习”；点击右上角“学习统计”，查看图表及历史记录。
@@ -175,7 +175,7 @@ v1.7.0 增加**正向计时**：选择该模式，只填写名称，从00:00开�
 
 便携版解压后运行 `拾序.exe`，并保留旁边的 `拾序.exe.config`。关闭主窗口只会隐藏主窗口；彻底退出请在托盘菜单中选择“退出”。
 
-从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.10.0-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
+从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.10.1-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
 
 ### 第一次使用
 
@@ -285,6 +285,7 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v1.10.1](https://github.com/XiongWen04/shixu/releases/tag/v1.10.1) | 补齐月历顶部与左侧外框；三套皮肤12项针对性检查通过 |
 | [v1.10.0](https://github.com/XiongWen04/shixu/releases/tag/v1.10.0) | 每日学习目标、自然周/月学习报告、待办搜索与标签；数据格式 v6 |
 | [v1.9.0](https://github.com/XiongWen04/shixu/releases/tag/v1.9.0) | 重复待办折叠、月历选中日期完整描边 |
 | [v1.8.1](https://github.com/XiongWen04/shixu/releases/tag/v1.8.1) | 顶部导航、番茄钟工作台与左右分栏月历 |

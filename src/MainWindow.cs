@@ -125,7 +125,7 @@ namespace DeskTodo
                     preview.TextWrapping = TextWrapping.NoWrap; preview.TextTrimming = TextTrimming.CharacterEllipsis; preview.Margin = new Thickness(0, 0, 0, 5); if (item.Done) preview.TextDecorations = TextDecorations.Strikethrough; stack.Children.Add(preview);
                 }
                 if (items.Count > 2) stack.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
-                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(14, 14, 10, 8); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = isSelected ? new Thickness(1) : new Thickness(0, 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
+                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(14, 14, 10, 8); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = isSelected ? new Thickness(1) : new Thickness(n % 7 == 0 ? 1 : 0, n < 7 ? 1 : 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
                 day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : "Surface"); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
                 System.Windows.Automation.AutomationProperties.SetName(day, date.ToString("yyyy年M月d日") + "，" + items.Count + " 件待办"); days.Children.Add(day);
             }
