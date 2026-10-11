@@ -36,7 +36,7 @@ namespace DeskTodo
             using (var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("App.ico"))
                 window.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(stream, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
         }
-        public static FrameworkElement TaskRow(AppController app, TodoItem item, bool compact)
+        public static FrameworkElement TaskRow(AppController app, TodoItem item, bool compact, bool flat = false)
         {
             var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) }); row.ColumnDefinitions.Add(new ColumnDefinition());
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
@@ -49,24 +49,29 @@ namespace DeskTodo
             title.MaxHeight = compact ? 44 : 62;
             if (item.Done) title.TextDecorations = TextDecorations.Strikethrough;
             content.Children.Add(title);
+            if (flat) { content.Orientation = Orientation.Horizontal; title.Width = 240; title.TextWrapping = TextWrapping.NoWrap; title.TextTrimming = TextTrimming.CharacterEllipsis; }
             string note = item.Note ?? "";
-            if (!String.IsNullOrWhiteSpace(note)) { var n = Text(note, 11, "Muted"); n.MaxHeight = 34; n.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(n); }
+            if (!flat && !String.IsNullOrWhiteSpace(note)) { var n = Text(note, 11, "Muted"); n.MaxHeight = 34; n.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(n); }
             string date = item.Date == null ? "未设日期" : DateTime.ParseExact(item.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("M月d日");
             if (item.Time != null) date += "  " + item.Time;
             if (item.Reminder) date += " · 提醒";
             if (item.SeriesId != null) date += " · 重复";
             if (Dates.Overdue(item, DateTime.Today)) date += " · 逾期";
+            if (flat) date = (item.Time ?? "未指定时间") + (String.IsNullOrWhiteSpace(item.Location) ? "" : "  ·  " + item.Location);
             var label = Text(date, 10, Dates.Overdue(item, DateTime.Today) ? "Danger" : "Muted"); label.Margin = new Thickness(0, 6, 0, 0); content.Children.Add(label);
-            if (!String.IsNullOrWhiteSpace(item.Location)) { var location = Text("地点：" + item.Location, 11, "Muted"); location.MaxHeight = 34; location.Margin = new Thickness(0, 4, 0, 0); location.ToolTip = item.Location; content.Children.Add(location); }
+            if (!flat && !String.IsNullOrWhiteSpace(item.Location)) { var location = Text("地点：" + item.Location, 11, "Muted"); location.MaxHeight = 34; location.Margin = new Thickness(0, 4, 0, 0); location.ToolTip = item.Location; content.Children.Add(location); }
             content.MouseLeftButtonDown += (s, e) => { if (e.ClickCount == 2) app.Edit(item, null); };
             Grid.SetColumn(content, 1); row.Children.Add(content);
             var star = Button(item.Important ? "★" : "☆", () => app.ToggleImportant(item.Id), "Quiet"); star.Padding = new Thickness(0); star.FontSize = 18; star.VerticalAlignment = VerticalAlignment.Top; star.SetResourceReference(System.Windows.Controls.Button.ForegroundProperty, item.Important ? "Accent" : "Muted"); star.ToolTip = item.Important ? "取消重要任务" : "标为重要任务"; AutomationProperties.SetName(star, "重要 " + item.Title); Grid.SetColumn(star, 2); row.Children.Add(star);
+            if (flat) star.MinHeight = 0;
             if (!compact)
             {
                 var edit = Button("✎", () => app.Edit(item, null), "Quiet"); edit.Padding = new Thickness(0); edit.ToolTip = "编辑"; edit.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(edit, "编辑 " + item.Title); Grid.SetColumn(edit, 3); row.Children.Add(edit);
                 var remove = Button("×", () => app.Delete(item.Id), "Quiet"); remove.Padding = new Thickness(0); remove.ToolTip = "删除当次（可撤销）"; remove.FontSize = 19; remove.VerticalAlignment = VerticalAlignment.Top; AutomationProperties.SetName(remove, "删除 " + item.Title); Grid.SetColumn(remove, 4); row.Children.Add(remove);
+                if (flat) { edit.MinHeight = 0; remove.MinHeight = 0; }
             }
             var card = Card(row, new Thickness(compact ? 12 : 14)); card.Margin = new Thickness(0, 0, 0, 9);
+            if (flat) { card.Padding = new Thickness(8); card.Margin = new Thickness(0, 0, 0, 3); card.BorderThickness = new Thickness(0, 0, 0, 1); card.CornerRadius = new CornerRadius(0); card.Background = Brushes.Transparent; card.ToolTip = item.Title + "\n" + (item.Note ?? ""); }
             if (compact) { card.SetResourceReference(Border.BackgroundProperty, "GlassCard"); card.SetResourceReference(Border.BorderBrushProperty, "GlassBorder"); }
             var menu = new ContextMenu();
             var editMenu = new MenuItem { Header = "编辑" }; editMenu.Click += (s, e) => app.Edit(item, null); menu.Items.Add(editMenu);

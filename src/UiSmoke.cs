@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -175,7 +175,7 @@ namespace DeskTodo
                 }
                 var editor = new EditWindow(app, null, DateTime.Today);
                 editor.Show(); editor.UpdateLayout(); Capture(editor, Path.Combine(root, "editor.png"));
-                Check(Controls<DatePickerTextBox>(editor).First().Background == Application.Current.Resources["Panel"], "date input follows dark theme");
+                Check(Controls<DatePickerTextBox>(editor).First().Background == Application.Current.Resources["Soft"], "date input follows dark theme");
                 Check(Controls<ComboBox>(editor).Any(c => AutomationProperties.GetName(c) == "待办小时") && Controls<ComboBox>(editor).Any(c => AutomationProperties.GetName(c) == "待办分钟"), "editor offers hour and minute selection");
                 Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办标题").Text = "界面输入测试";
                 Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办地点").Text = "会议室 A";
@@ -261,6 +261,7 @@ namespace DeskTodo
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "返回番茄钟").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var studyName = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习名称");
                 var studyMinutes = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习分钟");
+                { var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
                 studyName.Text = "阅读论文"; studyMinutes.Text = "25";
                 Check(Controls<TextBlock>(app.Main).First(t => AutomationProperties.GetName(t) == "学习倒计时").Text == "25:00", "focus page previews custom duration");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "开始学习").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -321,6 +322,7 @@ namespace DeskTodo
                     exampleStart = exampleStart.AddHours(4);
                     Study.Start(state, "学习英语", 20, exampleStart); Study.AddTime(state, exampleStart, 480); Study.Finish(state, exampleStart.AddMinutes(8), false);
                 });
+                { var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
                 studyName.Text = "阅读论文"; studyMinutes.Text = "25";
                 app.Main.Refresh(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "focus-dashboard.png"));
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "复习笔记") && Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("完成 2 次")), "today dashboard displays names and completed focus count");

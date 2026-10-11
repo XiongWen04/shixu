@@ -33,20 +33,16 @@ namespace DeskTodo
             SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain, app.Exit); };
             Closing += (s, e) => { if (!app.Exiting) { e.Cancel = true; Hide(); } };
             PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
-            var layout = new Grid(); layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) }); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content = layout;
-            var side = new DockPanel { Margin = new Thickness(16, 25, 16, 18) };
-            var sideBorder = new Border { Child = side }; sideBorder.SetResourceReference(Border.BackgroundProperty, "Sidebar"); layout.Children.Add(sideBorder);
-            var footer = new StackPanel(); DockPanel.SetDock(footer, Dock.Bottom); side.Children.Add(footer);
-            widgetToggle = Ui.Button("▣  桌面小组件", () => app.ToggleWidget(), "Quiet"); widgetToggle.HorizontalContentAlignment = HorizontalAlignment.Left; widgetToggle.FontSize = 12; widgetToggle.Padding = new Thickness(10, 10, 6, 10); widgetToggle.Margin = new Thickness(0, 0, 0, 8); footer.Children.Add(widgetToggle);
-            var settings = Ui.Button("⚙  设置", () => { var window = new SettingsWindow(app) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner }; window.ShowDialog(); }, "Quiet"); settings.HorizontalContentAlignment = HorizontalAlignment.Left; footer.Children.Add(settings);
-            var offline = Ui.Text("离线使用 · 自动保存", 10, "Muted"); offline.Margin = new Thickness(12, 18, 0, 0); footer.Children.Add(offline);
-            var nav = new StackPanel(); side.Children.Add(nav);
+            var layout = new DockPanel(); Content = layout;
+            var navigationBar = new Grid { Margin = new Thickness(24, 10, 24, 10) }; navigationBar.ColumnDefinitions.Add(new ColumnDefinition()); navigationBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            DockPanel.SetDock(navigationBar, Dock.Top); layout.Children.Add(navigationBar);
+            var nav = new StackPanel { Orientation = Orientation.Horizontal }; navigationBar.Children.Add(nav);
             string[] keys = { "今天", "全部", "月历", "番茄钟" }, icons = { "☀", "☷", "▦", "◷" };
-            for (int n = 0; n < keys.Length; n++)
-            {
-                string key = keys[n]; var b = Ui.Button(icons[n] + "   " + key, () => SelectPage(key), "Quiet"); b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Padding = new Thickness(14, 12, 10, 12); b.Margin = new Thickness(0, 0, 0, 8); navigation[key] = b; nav.Children.Add(b);
-            }
-            var main = new Grid { Margin = new Thickness(26, 24, 26, 16) }; main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); Grid.SetColumn(main, 1); layout.Children.Add(main);
+            for (int n = 0; n < keys.Length; n++) { string key = keys[n]; var b = Ui.Button(icons[n] + "  " + key, () => SelectPage(key), "Quiet"); b.Padding = new Thickness(18, 9, 18, 9); b.Margin = new Thickness(0, 0, 8, 0); navigation[key] = b; nav.Children.Add(b); }
+            var utilities = new StackPanel { Orientation = Orientation.Horizontal }; Grid.SetColumn(utilities, 1); navigationBar.Children.Add(utilities);
+            widgetToggle = Ui.Button("▣  桌面小组件", () => app.ToggleWidget(), "Quiet"); widgetToggle.FontSize = 11; widgetToggle.Padding = new Thickness(10, 8, 10, 8); utilities.Children.Add(widgetToggle);
+            utilities.Children.Add(Ui.Button("⚙  设置", () => { var window = new SettingsWindow(app) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner }; window.ShowDialog(); }, "Quiet"));
+            var main = new Grid { Margin = new Thickness(24, 12, 24, 14) }; main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); layout.Children.Add(main);
             var header = new Grid { Margin = new Thickness(0, 0, 0, 22) }; header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); main.Children.Add(header);
             var titles = new StackPanel(); titles.Children.Add(heading); subtitle.Margin = new Thickness(0, 8, 0, 0); titles.Children.Add(subtitle); header.Children.Add(titles);
             Grid.SetColumn(tools, 1); tools.VerticalAlignment = VerticalAlignment.Center; header.Children.Add(tools);
@@ -67,7 +63,7 @@ namespace DeskTodo
             foreach (var pair in navigation)
             {
                 bool active = pair.Key == page || (page == "学习统计" && pair.Key == "番茄钟");
-                pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "Sidebar");
+                pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "Surface");
                 pair.Value.SetResourceReference(Button.ForegroundProperty, active ? "Accent" : "Text");
                 pair.Value.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
             }
@@ -99,8 +95,8 @@ namespace DeskTodo
         }
         void RenderCalendar()
         {
-            body.ColumnDefinitions.Add(new ColumnDefinition()); body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(286) });
-            var calendar = new Grid { Margin = new Thickness(0, 0, 18, 0) }; calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) }); calendar.RowDefinitions.Add(new RowDefinition()); body.Children.Add(calendar);
+            body.RowDefinitions.Add(new RowDefinition()); body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(160) });
+            var calendar = new Grid { Margin = new Thickness(0, 0, 0, 12) }; calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) }); calendar.RowDefinitions.Add(new RowDefinition()); body.Children.Add(calendar);
             var weekdays = new UniformGrid { Rows = 1, Columns = 7 };
             foreach (string name in new[] { "一", "二", "三", "四", "五", "六", "日" }) { var t = Ui.Text(name, 12, "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; weekdays.Children.Add(t); }
             calendar.Children.Add(weekdays);
@@ -122,20 +118,20 @@ namespace DeskTodo
                     preview.TextWrapping = TextWrapping.NoWrap; preview.TextTrimming = TextTrimming.CharacterEllipsis; preview.Margin = new Thickness(0, 0, 0, 5); if (item.Done) preview.TextDecorations = TextDecorations.Strikethrough; stack.Children.Add(preview);
                 }
                 if (items.Count > 2) stack.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
-                var day = Ui.Button("", () => SelectDay(date)); day.Content = stack; day.Padding = new Thickness(9, 10, 9, 5); day.MinHeight = 0; day.Margin = new Thickness(1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
-                day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : "Panel"); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
+                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(9, 10, 9, 5); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = new Thickness(0, 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
+                day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : (n / 7 % 2 == 0 ? "Surface" : "Panel")); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
                 System.Windows.Automation.AutomationProperties.SetName(day, date.ToString("yyyy年M月d日") + "，" + items.Count + " 件待办"); days.Children.Add(day);
             }
-            var detail = new DockPanel();
-            var footer = new StackPanel { Margin = new Thickness(0, 14, 0, 0) }; DockPanel.SetDock(footer, Dock.Bottom); detail.Children.Add(footer);
-            footer.Children.Add(Ui.Button("＋ 添加当天待办", () => app.Edit(null, selected)));
-            if (app.CanUndo) { var undo = Ui.Button("撤销删除", app.UndoDelete, "Quiet"); undo.Margin = new Thickness(0, 7, 0, 0); footer.Children.Add(undo); }
-            var title = new StackPanel { Margin = new Thickness(0, 0, 0, 18) }; title.Children.Add(Ui.Text(selected.ToString("M月d日"), 21, "Text", true)); title.Children.Add(Ui.Text(selected.ToString("dddd"), 12, "Muted")); DockPanel.SetDock(title, Dock.Top); detail.Children.Add(title);
+            var detail = new Grid(); detail.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) }); detail.ColumnDefinitions.Add(new ColumnDefinition());
+            var title = new StackPanel { Margin = new Thickness(0, 2, 20, 0) }; title.Children.Add(Ui.Text(selected.ToString("M月d日"), 21, "Text", true)); title.Children.Add(Ui.Text(selected.ToString("dddd"), 12, "Muted"));
+            var addDay = Ui.Button("＋ 添加当天待办", () => app.Edit(null, selected), "Quiet"); addDay.Margin = new Thickness(0, 8, 0, 0); title.Children.Add(addDay);
+            if (app.CanUndo) title.Children.Add(Ui.Button("撤销删除", app.UndoDelete, "Quiet")); detail.Children.Add(title);
             var list = new StackPanel();
             var selectedItems = app.Store.State.Items.Where(i => i.Date == Dates.Key(selected)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
             if (selectedItems.Count == 0) Ui.Empty(list, "这一天还没有安排", "添加一件想完成的事");
-            else foreach (var item in selectedItems) list.Children.Add(Ui.TaskRow(app, item, false));
-            detail.Children.Add(Ui.Scroll(list)); var detailCard = Ui.Card(detail, new Thickness(16)); Grid.SetColumn(detailCard, 1); body.Children.Add(detailCard);
+            else foreach (var item in selectedItems) list.Children.Add(Ui.TaskRow(app, item, false, true));
+            var scroll = Ui.Scroll(list); Grid.SetColumn(scroll, 1); detail.Children.Add(scroll);
+            var detailCard = Ui.Card(detail, new Thickness(16)); Grid.SetRow(detailCard, 1); body.Children.Add(detailCard);
         }
         void RenderList()
         {
