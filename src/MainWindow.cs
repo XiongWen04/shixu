@@ -19,6 +19,8 @@ namespace DeskTodo
         readonly Dictionary<string, Button> navigation = new Dictionary<string, Button>();
         readonly HashSet<string> expandedGroups = new HashSet<string>();
         readonly Button widgetToggle;
+        readonly Image backdrop = new Image { Stretch = System.Windows.Media.Stretch.UniformToFill, IsHitTestVisible = false };
+        readonly Border backgroundShade = new Border { IsHitTestVisible = false };
         FocusPanel focusPanel;
         StudyStatsPanel studyStats;
         StudyPeriodPanel studyPeriod;
@@ -36,7 +38,7 @@ namespace DeskTodo
             SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain, app.Exit); };
             Closing += (s, e) => { if (!app.Exiting) { e.Cancel = true; Hide(); } };
             PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
-            var layout = new DockPanel(); Content = layout;
+            var host = new Grid { ClipToBounds = true }; Content = host; host.Children.Add(backdrop); backgroundShade.SetResourceReference(Border.BackgroundProperty, "Surface"); host.Children.Add(backgroundShade); var layout = new DockPanel(); host.Children.Add(layout); UpdateBackground(app.BackgroundImage, app.Settings.BackgroundShade);
             var navigationBar = new Grid { Margin = new Thickness(24, 10, 24, 10) }; navigationBar.ColumnDefinitions.Add(new ColumnDefinition()); navigationBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             DockPanel.SetDock(navigationBar, Dock.Top); layout.Children.Add(navigationBar);
             var nav = new StackPanel { Orientation = Orientation.Horizontal }; navigationBar.Children.Add(nav);
@@ -53,6 +55,7 @@ namespace DeskTodo
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; Refresh(); }
+        public void UpdateBackground(System.Windows.Media.Imaging.BitmapSource image, double shade) { backdrop.Source = image; backgroundShade.Opacity = shade; backdrop.Visibility = backgroundShade.Visibility = image == null ? Visibility.Collapsed : Visibility.Visible; }
         public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); if (page == "学习统计" && studyStats != null) studyStats.Refresh(); if (page == "学习报告" && studyPeriod != null) studyPeriod.Refresh(); }
         public void SelectDay(DateTime date) { app.EnsureOccurrences(new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))); selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
         public void Refresh()
@@ -66,7 +69,7 @@ namespace DeskTodo
             foreach (var pair in navigation)
             {
                 bool active = pair.Key == page || ((page == "学习统计" || page == "学习报告") && pair.Key == "番茄钟");
-                pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "Surface");
+                pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "MainCanvas");
                 pair.Value.SetResourceReference(Button.ForegroundProperty, active ? "Accent" : "Text");
                 pair.Value.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
             }
@@ -126,7 +129,7 @@ namespace DeskTodo
                 }
                 if (items.Count > 2) stack.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
                 var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(14, 14, 10, 8); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = isSelected ? new Thickness(1) : new Thickness(n % 7 == 0 ? 1 : 0, n < 7 ? 1 : 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
-                day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : "Surface"); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
+                day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : "MainCanvas"); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
                 System.Windows.Automation.AutomationProperties.SetName(day, date.ToString("yyyy年M月d日") + "，" + items.Count + " 件待办"); days.Children.Add(day);
             }
             var detail = new DockPanel();
@@ -139,7 +142,7 @@ namespace DeskTodo
             if (selectedItems.Count == 0) Ui.Empty(list, "这一天还没有安排", "添加一件想完成的事");
             else foreach (var item in selectedItems) list.Children.Add(Ui.TaskRow(app, item, false));
             detail.Children.Add(Ui.Scroll(list));
-            var detailCard = Ui.Card(detail, new Thickness(20)); detailCard.BorderThickness = new Thickness(1, 0, 0, 0); detailCard.CornerRadius = new CornerRadius(0); detailCard.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(detailCard, 1); body.Children.Add(detailCard);
+            var detailCard = Ui.Card(detail, new Thickness(20)); detailCard.BorderThickness = new Thickness(1, 0, 0, 0); detailCard.CornerRadius = new CornerRadius(0); detailCard.SetResourceReference(Border.BackgroundProperty, "MainCanvas"); Grid.SetColumn(detailCard, 1); body.Children.Add(detailCard);
         }
         void RenderList()
         {

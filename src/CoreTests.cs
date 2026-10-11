@@ -16,6 +16,11 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            var backgroundSettings = new AppSettings(); Check(backgroundSettings.BackgroundFile == "" && backgroundSettings.BackgroundShade == 0.65, "default background remains disabled with readable shade");
+            backgroundSettings.BackgroundFile = "../private.png"; Throws(() => backgroundSettings.Validate(), "background settings reject paths outside managed image directory");
+            backgroundSettings.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png"; backgroundSettings.Validate();
+            backgroundSettings.BackgroundShade = Double.NaN; Throws(() => backgroundSettings.Validate(), "background opacity rejects nonfinite values");
+            backgroundSettings.BackgroundShade = 0.1; Throws(() => backgroundSettings.Validate(), "background shade retains minimum text contrast layer");
             var tagged = Item("组会", "2026-10-11"); tagged.Tags = TodoSearch.ParseTags("科研，生活, 科研 ; Paper;paper"); tagged.Location = "B528";
             Check(tagged.Tags.SequenceEqual(new[] { "科研", "生活", "Paper" }), "tag input trims and deduplicates Chinese and English separators");
             Check(TodoSearch.Matches(tagged, "B528", "科研") && TodoSearch.Matches(tagged, "paper", ""), "todo search includes location and case insensitive tags");

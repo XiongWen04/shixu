@@ -97,6 +97,32 @@ namespace DeskTodo
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(path)) encoder.Save(file);
         }
+        public static void RunBackground(AppController app, string root)
+        {
+            try
+            {
+                string source = Path.Combine(root, "sample-background.png");
+                var drawing = new DrawingVisual(); using (var context = drawing.RenderOpen()) { context.DrawRectangle(new LinearGradientBrush(Color.FromRgb(24, 68, 86), Color.FromRgb(210, 180, 117), 35), null, new Rect(0, 0, 1200, 800)); context.DrawEllipse(new SolidColorBrush(Color.FromRgb(215, 217, 191)), null, new Point(970, 150), 90, 90); }
+                var image = new RenderTargetBitmap(1200, 800, 96, 96, PixelFormats.Pbgra32); image.Render(drawing); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var file = File.Create(source)) encoder.Save(file);
+                Check(app.ImportBackground(source), "local image imports successfully");
+                Check(app.BackgroundImage != null && app.BackgroundImage.IsFrozen && app.BackgroundImage.PixelWidth == 1200, "image is bounded cached and preserves aspect ratio");
+                string imported = app.Settings.BackgroundFile; Check(SettingsFile.Load(app.SettingsPath).BackgroundFile == imported && File.Exists(Path.Combine(root, "Backgrounds", imported)), "managed image and settings persist");
+                File.Move(source, source + ".moved"); app.LoadBackground(); Check(app.BackgroundImage != null, "moving original image does not break saved background");
+                foreach (string theme in new[] { "warm", "light", "dark" }) { app.ChangeTheme(theme); app.Main.UpdateLayout(); Check(Controls<Image>(app.Main).Any(i => i.Source == app.BackgroundImage && i.Visibility == Visibility.Visible), "background survives theme switching " + theme); Capture(app.Main, Path.Combine(root, "background-" + theme + ".png")); }
+                var themeButton = Controls<Button>(app.Main).First(b => (b.Content as string) == "换肤"); app.ThemeMenu(themeButton); Pump();
+                var menu = themeButton.ContextMenu; Check(menu.Items.OfType<MenuItem>().Any(i => (string)i.Header == "选择背景图片…") && menu.Items.OfType<MenuItem>().Any(i => (string)i.Header == "恢复默认背景"), "change skin menu exposes choose and restore commands");
+                var shadeMenu = menu.Items.OfType<MenuItem>().First(i => (string)i.Header == "背景遮罩"); shadeMenu.Items.OfType<MenuItem>().First(i => (string)i.Header == "40%").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); menu.IsOpen = false;
+                Check(SettingsFile.Load(app.SettingsPath).BackgroundShade == 0.4, "background shade menu persists chosen opacity");
+                app.Main.SelectPage("番茄钟"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "background-focus.png"));
+                string invalid = Path.Combine(root, "invalid.png"); File.WriteAllText(invalid, "not an image"); bool rejected = false; try { app.ImportBackground(invalid); } catch { rejected = true; }
+                Check(rejected && app.Settings.BackgroundFile == imported && app.BackgroundImage != null, "invalid image preserves existing background");
+                Check(app.ResetBackground() && app.BackgroundImage == null && app.Settings.BackgroundFile == "", "reset restores theme and saves default");
+                Check(!Controls<Image>(app.Main).Any(i => i.Visibility == Visibility.Visible), "default background hides image layer");
+                var missing = app.Settings.Copy(); missing.BackgroundFile = imported; Check(app.SaveSettings(missing), "saved background selection accepted"); File.Move(Path.Combine(root, "Backgrounds", imported), Path.Combine(root, "Backgrounds", imported + ".moved")); app.LoadBackground(); Check(app.BackgroundImage == null, "missing optional image falls back safely"); app.ResetBackground();
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "BACKGROUND PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void RunCalendar(AppController app, string root)
         {
             try

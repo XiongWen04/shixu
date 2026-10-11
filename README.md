@@ -4,13 +4,13 @@
 
 拾序是一款面向个人使用的 Windows 原生待办与学习专注软件。用月历安排事情，用桌面小组件查看任务，用番茄钟记录学习，再通过图表回顾时间分配。数据保存在本机，无需登录。
 
-当前版本：**v1.10.1**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
+当前版本：**v2.1.0**。基于 **C# / WPF / .NET Framework 4.8**，便携运行，无第三方运行依赖。
 
 [下载 Windows x64 便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
 ## 快速开始
 
-1. [下载 v1.10.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v1.10.1/Shixu-v1.10.1-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
+1. [下载 v2.1.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.1.0/Shixu-v2.1.0-win-x64-portable.zip)，解压到可写文件夹，运行 `拾序.exe`。
 2. 需要安排事情时，点击“添加”，填写标题、日期、时间和地点；按需开启提醒、重复或重要标记。
 3. 需要学习时，顶部打开“番茄钟”，填写学习名称与分钟数，点击“开始学习”。
 4. 学习结束后查看底部“今日学习”；点击右上角“学习统计”，查看图表及历史记录。
@@ -25,12 +25,27 @@
 | 设置每日学习目标 | 番茄钟底部“每日学习目标” |
 | 查看学习周报与月报 | 番茄钟或统计页右上角“周报 / 月报” |
 | 搜索待办、按标签筛选 | 顶部“全部” |
+| 设置图片背景、调整遮罩、恢复默认 | “换肤”菜单 |
 | 显示桌面任务小窗 | 右上角“显示小组件” |
 | 更换保存位置、导入导出 | 右上角“设置” |
 
 下载包不包含示例任务或个人数据。下方截图展示的是测试示例，不会写入你的清单。
 
 ## 界面预览
+
+### 自定义图片背景
+
+点击“换肤 → 选择背景图片…”，选择 PNG、JPG 或 BMP 本地图片（最大 32 MB）。主窗口使用居中填充，保持图片比例，超出窗口的部分裁切。图片会转为适合窗口显示的 PNG 副本，保存在设置文件旁的 `Backgrounds/`，移动原图也不影响使用。
+
+“换肤 → 背景遮罩”可选 20%、40%、65%、80%、90%；数值越高，图片越淡、文字越清晰，默认65%。三种配色均可搭配图片，选择皮肤不会移除背景。点击“恢复默认背景”回到纯色主题；此前导入的副本保留，设置备份仍可引用。背景图片不会随待办数据导出，也不会上传到 GitHub；移动便携目录时带上 `preferences.json` 与 `Backgrounds/`。
+
+![自定义图片背景与暖色主题](docs/screenshots/background-warm.png)
+
+![自定义图片背景与深色主题](docs/screenshots/background-dark.png)
+
+本功能作用于主窗口；桌面小组件继续使用桌面壁纸的毛玻璃效果。图片缺失或损坏时回退到默认主题，可重新选择图片。
+
+v2.1.0 通过104项核心检查和14项背景专项界面检查，覆盖图片导入、菜单操作、三套配色、遮罩保存、原图移动、无效图片保护与恢复默认。本次没有重跑整套学习功能界面检查。
 
 沿用**番茄钟B、月历新版2**：月历居左、当天任务居右，计时模式使用并排按钮。v1.10.0 增加每日学习目标、周/月报告和待办搜索标签；学习计时与普通待办独立。
 
@@ -175,7 +190,7 @@ v1.7.0 增加**正向计时**：选择该模式，只填写名称，从00:00开�
 
 便携版解压后运行 `拾序.exe`，并保留旁边的 `拾序.exe.config`。关闭主窗口只会隐藏主窗口；彻底退出请在托盘菜单中选择“退出”。
 
-从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v1.10.1-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
+从 [GitHub Releases](https://github.com/XiongWen04/shixu/releases/latest) 下载 `Shixu-v2.1.0-win-x64-portable.zip`。源码仓库本身不包含编译后的程序。仓库及 Release 已公开，可直接查看源码和下载附件。
 
 ### 第一次使用
 
@@ -285,6 +300,7 @@ Get-Content -LiteralPath (Join-Path $testPath 'ui-report.txt')
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v2.1.0](https://github.com/XiongWen04/shixu/releases/tag/v2.1.0) | 自定义主窗口图片背景、遮罩强度、恢复默认；数据格式仍为v6 |
 | [v1.10.1](https://github.com/XiongWen04/shixu/releases/tag/v1.10.1) | 补齐月历顶部与左侧外框；三套皮肤12项针对性检查通过 |
 | [v1.10.0](https://github.com/XiongWen04/shixu/releases/tag/v1.10.0) | 每日学习目标、自然周/月学习报告、待办搜索与标签；数据格式 v6 |
 | [v1.9.0](https://github.com/XiongWen04/shixu/releases/tag/v1.9.0) | 重复待办折叠、月历选中日期完整描边 |

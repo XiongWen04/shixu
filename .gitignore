@@ -9,6 +9,7 @@
 
 # 数据文件（自选保存位置时也不要提交）
 **/Data/
+**/Backgrounds/
 tasks.json*
 preferences.json*
 *.bak

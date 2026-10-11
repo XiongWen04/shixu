@@ -10,12 +10,13 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("1.10.1.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
 
 namespace DeskTodo
 {
@@ -27,8 +28,9 @@ namespace DeskTodo
             Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("zh-CN");
             Thread.CurrentThread.CurrentUICulture = Thread.CurrentThread.CurrentCulture;
             if ((args.Length == 1 || args.Length == 2) && args[0] == "--exit") { NativeDesktop.RequestExit(args.Length == 2 ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory); return 0; }
+            bool backgroundTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "background";
             bool calendarTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "calendar";
-            bool test = calendarTest || args.Length == 2 && args[0] == "--ui-test";
+            bool test = backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
             string root = test ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             Directory.CreateDirectory(root);
             bool created;
@@ -44,7 +46,7 @@ namespace DeskTodo
                     application.DispatcherUnhandledException += (s, e) => { app.Error("操作未完成", e.Exception); e.Handled = true; };
                     application.SessionEnding += (s, e) => app.Exit();
                     app.Start();
-                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
+                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
                     application.Run();
                     return Environment.ExitCode;
                 }
@@ -127,6 +129,7 @@ namespace DeskTodo
         public void Start()
         {
             SetPalette(Settings.Theme);
+            LoadBackground(); ApplyBackgroundPalette();
             Store.ExpandThrough(DateTime.Today.AddDays(62));
             Main = new MainWindow(this);
             Application.Current.MainWindow = Main;
@@ -251,7 +254,7 @@ namespace DeskTodo
         {
             var next = Settings.Copy(); next.Theme = name;
             if (!SaveSettings(next)) return false;
-            SetPalette(name); Refresh();
+            SetPalette(name); ApplyBackgroundPalette(); Refresh();
             foreach (Window window in Application.Current.Windows) NativeDesktop.DarkTitle(window, name == "dark");
             return true;
         }
@@ -277,8 +280,51 @@ namespace DeskTodo
                 string key = keys[n]; var item = new System.Windows.Controls.MenuItem { Header = names[n], IsCheckable = true, IsChecked = Settings.Theme == key };
                 item.Click += (s, e) => ChangeTheme(key); menu.Items.Add(item);
             }
-            menu.PlacementTarget = owner; menu.IsOpen = true;
+            menu.Items.Add(new System.Windows.Controls.Separator());
+            var select = new System.Windows.Controls.MenuItem { Header = "选择背景图片…" }; select.Click += (s, e) => { var picker = new Microsoft.Win32.OpenFileDialog { Title = "选择拾序背景", Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*" }; if (picker.ShowDialog(Main) == true) ImportBackground(picker.FileName); }; menu.Items.Add(select);
+            var shade = new System.Windows.Controls.MenuItem { Header = "背景遮罩" , IsEnabled = BackgroundImage != null };
+            foreach (double value in new[] { 0.2, 0.4, 0.65, 0.8, 0.9 }) { double opacity = value; var choice = new System.Windows.Controls.MenuItem { Header = (value * 100).ToString("0") + "%", IsCheckable = true, IsChecked = Math.Abs(Settings.BackgroundShade - value) < 0.001 }; choice.Click += (s, e) => SetBackgroundShade(opacity); shade.Items.Add(choice); } menu.Items.Add(shade);
+            var reset = new System.Windows.Controls.MenuItem { Header = "恢复默认背景", IsEnabled = Settings.BackgroundFile != "" }; reset.Click += (s, e) => ResetBackground(); menu.Items.Add(reset);
+            owner.ContextMenu = menu; menu.PlacementTarget = owner; menu.IsOpen = true;
         }
+        public BitmapSource BackgroundImage { get; private set; }
+        static BitmapSource ReadBackground(string path)
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("请选择小于 32 MB 的图片。");
+                var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0]; int width = frame.PixelWidth, height = frame.PixelHeight; stream.Position = 0;
+                var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
+                if ((double)width / height >= 1920.0 / 1080) image.DecodePixelWidth = Math.Min(width, 1920); else image.DecodePixelHeight = Math.Min(height, 1080);
+                image.StreamSource = stream; image.EndInit(); image.Freeze(); return image;
+            }
+        }
+        public void LoadBackground()
+        {
+            BackgroundImage = null;
+            if (Settings.BackgroundFile == "") return;
+            try { BackgroundImage = ReadBackground(Path.Combine(Path.GetDirectoryName(SettingsPath), "Backgrounds", Settings.BackgroundFile)); }
+            catch { /* shortcut: missing or damaged optional background falls back to the theme; select another image to restore it. */ }
+        }
+        void ApplyBackgroundPalette()
+        {
+            Application.Current.Resources["MainCanvas"] = BackgroundImage == null ? Application.Current.Resources["Surface"] : Brushes.Transparent;
+            if (BackgroundImage != null) { var panel = ((SolidColorBrush)Application.Current.Resources["Panel"]).Clone(); panel.Opacity = 0.9; Application.Current.Resources["Panel"] = panel; }
+            if (Main != null) Main.UpdateBackground(BackgroundImage, Settings.BackgroundShade);
+        }
+        public bool ImportBackground(string path)
+        {
+            try
+            {
+                var image = ReadBackground(path); var next = Settings.Copy(); next.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png";
+                string directory = Path.Combine(Path.GetDirectoryName(SettingsPath), "Backgrounds"); Directory.CreateDirectory(directory);
+                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var file = new FileStream(Path.Combine(directory, next.BackgroundFile), FileMode.CreateNew)) encoder.Save(file);
+                if (!SaveSettings(next)) return false; BackgroundImage = image; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh(); return true;
+            }
+            catch (Exception ex) { if (TestMode) throw; Error("背景图片未更换", ex); return false; }
+        }
+        public bool SetBackgroundShade(double opacity) { var next = Settings.Copy(); next.BackgroundShade = opacity; if (!SaveSettings(next)) return false; if (Main != null) Main.UpdateBackground(BackgroundImage, opacity); return true; }
+        public bool ResetBackground() { var next = Settings.Copy(); next.BackgroundFile = ""; if (!SaveSettings(next)) return false; BackgroundImage = null; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh(); return true; }
         public void ToggleWidget()
         {
             var next = Settings.Copy(); next.WidgetVisible = !next.WidgetVisible;
