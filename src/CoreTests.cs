@@ -16,6 +16,22 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            var tagged = Item("组会", "2026-10-11"); tagged.Tags = TodoSearch.ParseTags("科研，生活, 科研 ; Paper;paper"); tagged.Location = "B528";
+            Check(tagged.Tags.SequenceEqual(new[] { "科研", "生活", "Paper" }), "tag input trims and deduplicates Chinese and English separators");
+            Check(TodoSearch.Matches(tagged, "B528", "科研") && TodoSearch.Matches(tagged, "paper", ""), "todo search includes location and case insensitive tags");
+            Check(!TodoSearch.Matches(tagged, "组会", "课程") && !TodoSearch.Matches(tagged, "不存在", "科研"), "text and tag filters combine without unrelated matches");
+            var taggedState = new TodoState { DailyGoalMinutes = 120, Items = new List<TodoItem> { tagged } }; var tagCopy = taggedState.Copy(); tagCopy.Items[0].Tags.Add("副本");
+            Check(tagged.Tags.Count == 3 && tagCopy.DailyGoalMinutes == 120, "atomic state copies deep copy tags and preserve goal");
+            string taggedPath = Path.Combine(root, "tagged.json"); JsonFile.Write(taggedPath, taggedState); var tagRestore = DataStore.ReadState(taggedPath);
+            Check(tagRestore.DailyGoalMinutes == 120 && tagRestore.Items[0].Tags.SequenceEqual(tagged.Tags), "goals and tags survive export and reload");
+            taggedState.DailyGoalMinutes = 1441; Throws(() => taggedState.Validate(), "goal rejects more than one day"); taggedState.DailyGoalMinutes = 0; taggedState.Validate();
+            tagged.Tags.Add(new string('字', 21)); Throws(() => taggedState.Validate(), "oversized tags are rejected at storage boundary"); tagged.Tags.RemoveAt(3);
+            var weekRange = Study.PeriodRange(new DateTime(2026, 10, 11), false);
+            Check(weekRange[0] == new DateTime(2026, 10, 5) && weekRange[1] == new DateTime(2026, 10, 11), "weekly reports run Monday through Sunday");
+            var monthRange = Study.PeriodRange(new DateTime(2024, 2, 12), true);
+            Check(monthRange[0] == new DateTime(2024, 2, 1) && monthRange[1] == new DateTime(2024, 2, 29), "monthly reports use leap year calendar boundaries");
+            var yearWeek = Study.PeriodRange(new DateTime(2027, 1, 1), false);
+            Check(yearWeek[0] == new DateTime(2026, 12, 28) && yearWeek[1] == new DateTime(2027, 1, 3), "weekly report crosses year boundaries");
             var repeatedA = Item("刷网课", "2026-10-11"); var repeatedB = Item("刷网课", "2026-10-12");
             Check(TodoGroups.Key(repeatedA) == TodoGroups.Key(repeatedB), "identical dated tasks share display group without changing records");
             repeatedB.Location = "不同地点"; Check(TodoGroups.Key(repeatedA) != TodoGroups.Key(repeatedB), "same title with different task content stays separate");
@@ -150,10 +166,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 5 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 6 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 5, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 6, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");

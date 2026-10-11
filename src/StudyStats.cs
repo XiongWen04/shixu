@@ -10,6 +10,49 @@ using System.Windows.Media;
 
 namespace DeskTodo
 {
+    public class StudyPeriodPanel : ScrollViewer
+    {
+        readonly AppController app;
+        readonly StackPanel root = new StackPanel(), reportContent = new StackPanel();
+        readonly ComboBox mode = new ComboBox { ItemsSource = new[] { "周报", "月报" }, SelectedIndex = 0, Width = 100 };
+        readonly DatePicker date = new DatePicker { SelectedDate = DateTime.Today, FirstDayOfWeek = DayOfWeek.Monday, Width = 160 };
+        string reportKey;
+        public StudyPeriodPanel(AppController controller)
+        {
+            app = controller; Content = root; VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 18) }; AutomationProperties.SetName(mode, "学习报告周期"); AutomationProperties.SetName(date, "学习报告日期"); date.DisplayDateStart = new DateTime(2, 1, 1); date.DisplayDateEnd = DateTime.Today;
+            bar.Children.Add(mode); date.Margin = new Thickness(12, 0, 12, 0); bar.Children.Add(date); bar.Children.Add(Ui.Button("本期", () => date.SelectedDate = DateTime.Today)); root.Children.Add(bar); root.Children.Add(reportContent);
+            mode.SelectionChanged += (s, e) => Refresh(true); date.SelectedDateChanged += (s, e) => Refresh(true); Refresh(true);
+        }
+        static string Duration(double seconds) { return ((int)(seconds / 3600)) + " 小时 " + ((int)(seconds % 3600 / 60)) + " 分"; }
+        static Border Metric(string title, string value) { var panel = new StackPanel(); panel.Children.Add(Ui.Text(title, 12, "Muted")); var number = Ui.Text(value, 24, "Accent", true); number.Margin = new Thickness(0, 8, 0, 0); panel.Children.Add(number); var card = Ui.Card(panel, new Thickness(16)); card.Margin = new Thickness(0, 0, 12, 0); return card; }
+        public void Refresh(bool force = false)
+        {
+            date.DisplayDateEnd = DateTime.Today; var chosen = (date.SelectedDate ?? DateTime.Today).Date; if (chosen > DateTime.Today) chosen = DateTime.Today;
+            string key = Dates.Key(chosen) + ":" + Dates.Key(DateTime.Today) + ":" + mode.SelectedIndex + ":" + app.Store.State.FocusHistory.Count + ":" + (app.Store.State.FocusHistory.LastOrDefault() == null ? "" : app.Store.State.FocusHistory.Last().Id) + ":" + (app.Store.State.ActiveFocus == null ? "" : app.Store.State.ActiveFocus.Id) + ":" + Math.Floor(app.FocusSeconds / 5);
+            if (!force && key == reportKey) return; reportKey = key;
+            bool monthly = mode.SelectedIndex == 1; var range = Study.PeriodRange(chosen, monthly); var end = range[1] < DateTime.Today ? range[1] : DateTime.Today;
+            var sessions = app.Store.State.FocusHistory.ToList(); var active = app.FocusSnapshot(); if (active != null) sessions.Add(active); var report = Study.Summarize(sessions, range[0], end);
+            var prior = Study.PeriodRange(monthly ? range[0].AddMonths(-1) : range[0].AddDays(-7), monthly); var previousEnd = prior[0].AddDays((end - range[0]).Days); if (previousEnd > prior[1]) previousEnd = prior[1]; var previous = Study.Summarize(sessions, prior[0], previousEnd);
+            reportContent.Children.Clear(); var heading = Ui.Text(range[0].ToString("yyyy年M月d日") + " – " + range[1].ToString("M月d日"), 23, "Text", true); reportContent.Children.Add(heading);
+            var hint = Ui.Text("统计至 " + end.ToString("M月d日") + " · 实际计时，含提前结束与进行中的学习 · 不包含待办", 12, "Muted"); hint.Margin = new Thickness(0, 6, 0, 18); reportContent.Children.Add(hint);
+            var summary = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, 0, 18) }; summary.Children.Add(Metric("学习总时长", Duration(report.TotalSeconds))); summary.Children.Add(Metric("学习天数", report.SecondsByDay.Count(p => p.Value > 0) + " 天")); summary.Children.Add(Metric("完成次数", report.Completed + " 次")); summary.Children.Add(Metric("日均时长（含未学习日）", Duration(report.TotalSeconds / report.SecondsByDay.Count))); reportContent.Children.Add(summary);
+            double difference = report.TotalSeconds - previous.TotalSeconds;
+            var compare = Ui.Text("比上" + (monthly ? "月" : "周") + "同期" + (difference >= 0 ? "增加 " : "减少 ") + Duration(Math.Abs(difference)) + " · 对比 " + prior[0].ToString("M/d") + " – " + previousEnd.ToString("M/d"), 13, "Muted"); compare.Margin = new Thickness(0, 0, 0, 18); reportContent.Children.Add(compare);
+            var chartPanel = new StackPanel(); chartPanel.Children.Add(Ui.Text("每日学习时长 · 分钟", 16, "Text", true)); var chart = new UniformGrid { Columns = report.SecondsByDay.Count, Margin = new Thickness(0, 16, 0, 0) }; double max = Math.Max(60, report.SecondsByDay.Values.Max());
+            foreach (var pair in report.SecondsByDay.OrderBy(p => p.Key))
+            {
+                var column = new StackPanel { Margin = new Thickness(monthly ? 2 : 8, 0, monthly ? 2 : 8, 0), ToolTip = pair.Key + " · " + Duration(pair.Value) }; var value = Ui.Text((pair.Value / 60).ToString("0.#"), monthly ? 9 : 11, "Muted"); value.TextAlignment = TextAlignment.Center; column.Children.Add(value);
+                var plot = new Grid { Height = 140 }; var fill = new Border { Height = pair.Value / max * 140, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(3, 3, 0, 0) }; fill.SetResourceReference(Border.BackgroundProperty, "Accent"); plot.Children.Add(fill); column.Children.Add(plot);
+                var label = Ui.Text(DateTime.ParseExact(pair.Key, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString(monthly ? "%d" : "M/d"), 10, "Muted"); label.TextAlignment = TextAlignment.Center; label.Margin = new Thickness(0, 6, 0, 0); column.Children.Add(label); chart.Children.Add(column);
+            }
+            chartPanel.Children.Add(chart); var chartCard = Ui.Card(chartPanel, new Thickness(18)); chartCard.Margin = new Thickness(0, 0, 0, 18); reportContent.Children.Add(chartCard);
+            var ranking = new StackPanel(); ranking.Children.Add(Ui.Text("主要学习内容", 16, "Text", true));
+            if (report.TotalSeconds == 0) Ui.Empty(ranking, "本期还没有学习时长", "开始计时后，学习记录会自动汇总到这里");
+            foreach (var pair in report.SecondsByTitle.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(5)) { var item = Ui.Text(pair.Key + "  ·  " + Duration(pair.Value) + "  ·  " + (pair.Value / report.TotalSeconds * 100).ToString("0.#") + "%", 13, "Text"); item.Margin = new Thickness(0, 10, 0, 0); ranking.Children.Add(item); }
+            var best = report.SecondsByDay.OrderByDescending(p => p.Value).ThenBy(p => p.Key).First(); if (best.Value > 0) { var peak = Ui.Text("学习最多的一天：" + best.Key + " · " + Duration(best.Value), 12, "Muted"); peak.Margin = new Thickness(0, 16, 0, 0); ranking.Children.Add(peak); } reportContent.Children.Add(Ui.Card(ranking, new Thickness(18)));
+        }
+    }
     public class StudyStatsPanel : ScrollViewer
     {
         readonly AppController app;

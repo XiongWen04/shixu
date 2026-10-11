@@ -17,13 +17,24 @@ namespace DeskTodo
         [DataMember(EmitDefaultValue = false)] public string Time;
         [DataMember(EmitDefaultValue = false)] public string Location;
         [DataMember] public string Note = "";
+        [DataMember] public List<string> Tags = new List<string>();
+        [OnDeserializing] void Defaults(StreamingContext c) { Tags = new List<string>(); }
         [DataMember] public string CreatedUtc;
         [DataMember] public bool Done;
         [DataMember(EmitDefaultValue = false)] public bool Important;
         [DataMember(EmitDefaultValue = false)] public bool Reminder;
         [DataMember(EmitDefaultValue = false)] public string NotifiedFor;
         [DataMember(EmitDefaultValue = false)] public string SeriesId;
-        public TodoItem Copy() { return (TodoItem)MemberwiseClone(); }
+        public TodoItem Copy() { var copy = (TodoItem)MemberwiseClone(); copy.Tags = Tags == null ? null : new List<string>(Tags); return copy; }
+    }
+
+    public static class TodoSearch
+    {
+        public static List<string> ParseTags(string text) { return (text ?? "").Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList(); }
+        public static bool Matches(TodoItem item, string query, string tag)
+        {
+            return (String.IsNullOrEmpty(tag) || item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase)) && (String.IsNullOrWhiteSpace(query) || new[] { item.Title, item.Note, item.Location, String.Join(" ", item.Tags) }.Any(value => value != null && value.IndexOf(query.Trim(), StringComparison.OrdinalIgnoreCase) >= 0));
+        }
     }
 
     public static class TodoGroups
@@ -32,23 +43,25 @@ namespace DeskTodo
         {
             if (item.SeriesId != null) return "series:" + item.SeriesId;
             if (item.Date == null) return "item:" + item.Id;
-            return "dated:" + String.Concat(new[] { item.Title, item.Time ?? "", item.Location ?? "", item.Note ?? "", item.Reminder.ToString() }.Select(value => value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value));
+            return "dated:" + String.Concat(new[] { item.Title, item.Time ?? "", item.Location ?? "", item.Note ?? "", item.Reminder.ToString(), String.Join("\u001f", item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) }.Select(value => value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value));
         }
     }
 
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 5;
+        [DataMember(IsRequired = true)] public int Version = 6;
+        [DataMember] public int DailyGoalMinutes;
         [DataMember(IsRequired = true)] public List<TodoItem> Items = new List<TodoItem>();
         [DataMember] public List<RepeatSeries> Series = new List<RepeatSeries>();
         [DataMember] public List<FocusSession> FocusHistory = new List<FocusSession>();
         [DataMember(EmitDefaultValue = false)] public FocusSession ActiveFocus;
         [OnDeserializing] void Defaults(StreamingContext c) { Series = new List<RepeatSeries>(); FocusHistory = new List<FocusSession>(); }
-        public TodoState Copy() { return new TodoState { Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
+        public TodoState Copy() { return new TodoState { DailyGoalMinutes = DailyGoalMinutes, Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
         public void Validate()
         {
-            if (Version < 1 || Version > 5) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version < 1 || Version > 6) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (DailyGoalMinutes < 0 || DailyGoalMinutes > 1440) throw new InvalidDataException("每日目标应为 0 至 1440 分钟，0 表示关闭目标。");
             if (FocusHistory == null || FocusHistory.Count > 10000) throw new InvalidDataException("学习记录无效或超过 10000 次，请先导出备份。");
             var focusIds = new HashSet<string>();
             foreach (var focus in FocusHistory) { if (focus == null || !focusIds.Add(focus.Id)) throw new InvalidDataException("学习记录重复或无效。"); focus.Validate(false); }
@@ -69,6 +82,7 @@ namespace DeskTodo
                 if (i == null || !Guid.TryParse(i.Id, out id) || !ids.Add(i.Id)) throw new InvalidDataException("待办编号无效或重复。");
                 if (String.IsNullOrWhiteSpace(i.Title) || i.Title.Length > 200) throw new InvalidDataException("标题不能为空，最多 200 字。");
                 if (i.Note != null && i.Note.Length > 4000) throw new InvalidDataException("备注最多 4000 字。");
+                if (i.Tags == null || i.Tags.Count > 10 || i.Tags.Any(t => String.IsNullOrWhiteSpace(t) || t != t.Trim() || t.Length > 20 || t.IndexOfAny(new[] { ',', '，', ';', '；' }) >= 0) || i.Tags.Distinct(StringComparer.OrdinalIgnoreCase).Count() != i.Tags.Count) throw new InvalidDataException("最多 10 个标签，每个最多 20 字，不能重复或含分隔符。");
                 DateTime parsed;
                 if (i.Date != null && !DateTime.TryParseExact(i.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("待办日期无效。");
                 if (i.Time != null && (i.Date == null || !DateTime.TryParseExact(i.Time, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed))) throw new InvalidDataException("时间需要指定日期，并使用 00:00 至 23:59 的格式。");
@@ -116,6 +130,12 @@ namespace DeskTodo
 
     public static class Study
     {
+        public static DateTime[] PeriodRange(DateTime day, bool monthly)
+        {
+            day = day.Date;
+            var start = monthly ? new DateTime(day.Year, day.Month, 1) : day.AddDays(-((int)day.DayOfWeek + 6) % 7);
+            return new[] { start, monthly ? start.AddDays(DateTime.DaysInMonth(day.Year, day.Month) - 1) : start.AddDays(6) };
+        }
         public static void Start(TodoState state, string title, int minutes, DateTimeOffset now, bool countUp = false)
         {
             if (state.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习。");
@@ -365,7 +385,7 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 5; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 6; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
         public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }

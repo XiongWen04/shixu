@@ -15,7 +15,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyVersion("1.10.0.0")]
 
 namespace DeskTodo
 {
@@ -194,6 +194,11 @@ namespace DeskTodo
             catch (Exception ex) { if (TestMode) throw; Error("保存失败", ex); return false; }
         }
         public void ToggleImportant(string id) { Mutate(items => { var item = items.First(i => i.Id == id); item.Important = !item.Important; }); }
+        public bool SetDailyGoal(int minutes)
+        {
+            try { Store.ChangeState(state => state.DailyGoalMinutes = minutes); Main.RefreshFocus(); return true; }
+            catch (Exception ex) { if (TestMode) throw; Error("学习目标保存失败", ex); return false; }
+        }
         public void StopRepeating(TodoItem item)
         {
             if (item.SeriesId == null) return;

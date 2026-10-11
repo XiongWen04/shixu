@@ -122,6 +122,9 @@ namespace DeskTodo
         readonly TextBlock total = Ui.Text("00:00", 32, "Text", true);
         readonly TextBlock count = Ui.Text("", 12, "Muted");
         readonly StackPanel history = new StackPanel();
+        readonly TextBox goalMinutes = new TextBox { Width = 62, MaxLength = 4, ToolTip = "每天 1–1440 分钟；填 0 关闭目标" };
+        readonly TextBlock goalStatus = Ui.Text("", 11, "Muted");
+        readonly ProgressBar goalProgress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 5, Margin = new Thickness(0, 7, 0, 0) };
         readonly Button start, pause, finish;
         Button downMode, upMode;
         readonly StackPanel taskList = new StackPanel();
@@ -152,9 +155,13 @@ namespace DeskTodo
             var addTask = Ui.Button("＋ 添加待办", () => app.Edit(null, DateTime.Today), "Quiet"); DockPanel.SetDock(addTask, Dock.Right); listHeader.Children.Add(addTask); listHeader.Children.Add(Ui.Text("今日任务与记录", 17, "Text", true));
             var listContent = new StackPanel(); listContent.Children.Add(taskList); var recorded = Ui.Text("已记录的学习", 12, "Muted"); recorded.Margin = new Thickness(0, 18, 0, 12); listContent.Children.Add(recorded); listContent.Children.Add(history);
             stats.Children.Add(Ui.Scroll(listContent)); var statsCard = Ui.Card(stats, new Thickness(16)); statsCard.BorderThickness = new Thickness(0); statsCard.Margin = new Thickness(0, 0, 0, 14); Children.Add(statsCard);
-            var band = new Grid(); band.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) }); band.ColumnDefinitions.Add(new ColumnDefinition());
+            var band = new Grid(); band.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) }); band.ColumnDefinitions.Add(new ColumnDefinition()); band.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
             var summary = new StackPanel(); summary.Children.Add(Ui.Text("今日学习", 14, "Text", true)); dayLabel.Margin = new Thickness(0, 3, 0, 5); summary.Children.Add(dayLabel); total.FontSize = 30; summary.Children.Add(total); summary.Children.Add(count); band.Children.Add(summary);
             var trendPanel = new StackPanel(); trendPanel.Children.Add(Ui.Text("近7天学习时长 · 分钟", 11, "Muted")); trend.Margin = new Thickness(0, 6, 0, 0); trendPanel.Children.Add(trend); Grid.SetColumn(trendPanel, 1); band.Children.Add(trendPanel);
+            var goal = new StackPanel { Margin = new Thickness(20, 0, 0, 0) }; goal.Children.Add(Ui.Text("每日学习目标", 14, "Text", true));
+            var goalRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0) }; goalMinutes.Text = app.Store.State.DailyGoalMinutes.ToString(); AutomationProperties.SetName(goalMinutes, "每日目标分钟"); goalRow.Children.Add(goalMinutes);
+            var goalUnit = Ui.Text("分钟", 11, "Muted"); goalUnit.VerticalAlignment = VerticalAlignment.Center; goalUnit.Margin = new Thickness(7, 0, 7, 0); goalRow.Children.Add(goalUnit);
+            var saveGoal = Ui.Button("设置", () => { int value; if (!Int32.TryParse(goalMinutes.Text.Trim(), out value) || value < 0 || value > 1440) { goalStatus.Text = "请输入 0–1440 分钟"; return; } if (app.SetDailyGoal(value)) Refresh(); }); AutomationProperties.SetName(saveGoal, "保存每日目标"); saveGoal.Padding = new Thickness(8, 4, 8, 4); goalRow.Children.Add(saveGoal); goal.Children.Add(goalRow); goal.Children.Add(goalStatus); goalProgress.SetResourceReference(ProgressBar.ForegroundProperty, "Accent"); goalProgress.SetResourceReference(ProgressBar.BackgroundProperty, "Soft"); goal.Children.Add(goalProgress); Grid.SetColumn(goal, 2); band.Children.Add(goal);
             var bandCard = Ui.Card(band, new Thickness(16)); Grid.SetRow(bandCard, 1); Grid.SetColumnSpan(bandCard, 2); Children.Add(bandCard);
             minutes.TextChanged += (s, e) => { if (app.Store.State.ActiveFocus == null) { int value; if (Int32.TryParse(minutes.Text, out value) && value >= 1 && value <= 720) countdown.Text = Study.FormatDuration(value * 60); } };
             mode.SelectionChanged += (s, e) => Refresh();
@@ -174,6 +181,9 @@ namespace DeskTodo
             var records = app.Store.State.FocusHistory.Where(f => Study.SecondsOn(f, today) > 0 || DateTimeOffset.ParseExact(f.EndedAt, "o", CultureInfo.InvariantCulture).Date == today).ToList();
             double seconds = records.Sum(f => Study.SecondsOn(f, today)); var current = app.FocusSnapshot(); if (current != null) seconds += Study.SecondsOn(current, today);
             total.Text = Study.FormatDuration(seconds);
+            int target = app.Store.State.DailyGoalMinutes; goalProgress.Value = target == 0 ? 0 : Math.Min(100, seconds / (target * 60) * 100); goalProgress.Visibility = target == 0 ? Visibility.Collapsed : Visibility.Visible;
+            goalStatus.Text = target == 0 ? "未设置目标 · 填 0 可关闭" : seconds >= target * 60 ? "今日目标已达成 ✓" : "已学 " + (int)(seconds / 60) + " 分 · 还差 " + (int)Math.Ceiling(target - seconds / 60) + " 分";
+            if (!goalMinutes.IsKeyboardFocusWithin) goalMinutes.Text = target.ToString();
             RefreshTasksAndTrend(today, current);
             int completed = records.Count(f => f.Completed && DateTimeOffset.ParseExact(f.EndedAt, "o", CultureInfo.InvariantCulture).Date == today);
             int ended = records.Count(f => !f.Completed && DateTimeOffset.ParseExact(f.EndedAt, "o", CultureInfo.InvariantCulture).Date == today);

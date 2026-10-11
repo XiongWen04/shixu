@@ -60,6 +60,7 @@ namespace DeskTodo
             if (flat) date = (item.Time ?? "未指定时间") + (String.IsNullOrWhiteSpace(item.Location) ? "" : "  ·  " + item.Location);
             var label = Text(date, 10, Dates.Overdue(item, DateTime.Today) ? "Danger" : "Muted"); label.Margin = new Thickness(0, 6, 0, 0); content.Children.Add(label);
             if (!flat && !String.IsNullOrWhiteSpace(item.Location)) { var location = Text("地点：" + item.Location, 11, "Muted"); location.MaxHeight = 34; location.Margin = new Thickness(0, 4, 0, 0); location.ToolTip = item.Location; content.Children.Add(location); }
+            if (!compact && item.Tags.Count > 0) { var tags = Text(String.Join("  ", item.Tags.Select(t => "#" + t)), 11, "Accent"); tags.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(tags); }
             content.MouseLeftButtonDown += (s, e) => { if (e.ClickCount == 2) app.Edit(item, null); };
             Grid.SetColumn(content, 1); row.Children.Add(content);
             var star = Button(item.Important ? "★" : "☆", () => app.ToggleImportant(item.Id), "Quiet"); star.Padding = new Thickness(0); star.FontSize = 18; star.VerticalAlignment = VerticalAlignment.Top; star.SetResourceReference(System.Windows.Controls.Button.ForegroundProperty, item.Important ? "Accent" : "Muted"); star.ToolTip = item.Important ? "取消重要任务" : "标为重要任务"; AutomationProperties.SetName(star, "重要 " + item.Title); Grid.SetColumn(star, 2); row.Children.Add(star);
@@ -137,6 +138,8 @@ namespace DeskTodo
             var noteLabel = Ui.Text("备注（可选）", 12, "Muted"); noteLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(noteLabel);
             var note = new TextBox { Text = existing == null ? "" : existing.Note ?? "", MaxLength = 4000, Height = 80, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             AutomationProperties.SetName(note, "备注"); fields.Children.Add(note);
+            var tagLabel = Ui.Text("标签（可选，用逗号分隔）", 12, "Muted"); tagLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(tagLabel);
+            var tags = new TextBox { Text = existing == null ? "" : String.Join("，", existing.Tags), MaxLength = 220, ToolTip = "例如：课程，论文，生活；最多 10 个，每个最多 20 字" }; AutomationProperties.SetName(tags, "待办标签"); fields.Children.Add(tags);
             var done = new CheckBox { Content = "已完成", IsChecked = existing != null && existing.Done, Margin = new Thickness(0, 14, 0, 0) }; fields.Children.Add(done);
             var error = Ui.Text("", 12, "Danger"); error.Margin = new Thickness(0, 8, 0, 0); fields.Children.Add(error);
             var save = Ui.Button("保存待办", () =>
@@ -151,6 +154,8 @@ namespace DeskTodo
                 item.Date = noDate.IsChecked == true ? null : Dates.Key(picker.SelectedDate.Value);
                 item.Time = item.Date != null && timed.IsChecked == true ? hours.SelectedItem + ":" + minutes.SelectedItem : null;
                 item.Location = String.IsNullOrWhiteSpace(location.Text) ? null : location.Text.Trim();
+                item.Tags = TodoSearch.ParseTags(tags.Text);
+                if (item.Tags.Count > 10 || item.Tags.Any(t => t.Length > 20)) { error.Text = "最多 10 个标签，每个最多 20 字。"; tags.Focus(); return; }
                 item.Important = important.IsChecked == true; item.Reminder = item.Time != null && reminder.IsChecked == true;
                 if (app.SaveTodo(item, existing, repeat.IsEnabled ? repeatKinds[repeat.SelectedIndex] : null)) Close();
             }, "Primary"); save.IsDefault = true; bottom.Children.Add(save);

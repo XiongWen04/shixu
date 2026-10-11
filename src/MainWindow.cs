@@ -21,6 +21,8 @@ namespace DeskTodo
         readonly Button widgetToggle;
         FocusPanel focusPanel;
         StudyStatsPanel studyStats;
+        StudyPeriodPanel studyPeriod;
+        string taskSearch = "", taskTag = "";
         string page = "月历";
         bool showCompleted = true;
         DateTime selected = DateTime.Today;
@@ -51,7 +53,7 @@ namespace DeskTodo
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; Refresh(); }
-        public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); if (page == "学习统计" && studyStats != null) studyStats.Refresh(); }
+        public void RefreshFocus() { if (focusPanel != null) focusPanel.Refresh(); if (page == "学习统计" && studyStats != null) studyStats.Refresh(); if (page == "学习报告" && studyPeriod != null) studyPeriod.Refresh(); }
         public void SelectDay(DateTime date) { app.EnsureOccurrences(new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))); selected = date.Date; Month = new DateTime(date.Year, date.Month, 1); Refresh(); }
         public void Refresh()
         {
@@ -63,7 +65,7 @@ namespace DeskTodo
             System.Windows.Automation.AutomationProperties.SetName(widgetToggle, visible ? "隐藏桌面小组件" : "显示桌面小组件");
             foreach (var pair in navigation)
             {
-                bool active = pair.Key == page || (page == "学习统计" && pair.Key == "番茄钟");
+                bool active = pair.Key == page || ((page == "学习统计" || page == "学习报告") && pair.Key == "番茄钟");
                 pair.Value.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "Surface");
                 pair.Value.SetResourceReference(Button.ForegroundProperty, active ? "Accent" : "Text");
                 pair.Value.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
@@ -78,17 +80,21 @@ namespace DeskTodo
             }
             else if (page == "番茄钟") { heading.Text = "番茄钟"; subtitle.Text = "给这段时间一个名字，专心学完这一轮"; }
             else if (page == "学习统计") { heading.Text = "学习统计"; subtitle.Text = "看看时间去了哪里，也看看自己走了多远"; }
+            else if (page == "学习报告") { heading.Text = "学习周报与月报"; subtitle.Text = "按自然周和自然月回顾实际学习时间"; }
             else { heading.Text = page == "今天" ? "今天" : "全部待办"; subtitle.Text = page == "今天" ? DateTime.Today.ToString("M月d日 dddd") : "有日期与无日期的待办都在这里"; }
             Button theme = null; theme = Ui.Button("换肤", () => app.ThemeMenu(theme)); theme.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(theme);
             if (page == "番茄钟") AddTool("学习统计", () => SelectPage("学习统计"));
             if (page == "学习统计") AddTool("返回番茄钟", () => SelectPage("番茄钟"));
-            if (page != "番茄钟" && page != "学习统计") { var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
+            if (page == "学习统计" || page == "番茄钟") AddTool("周报 / 月报", () => SelectPage("学习报告"));
+            if (page == "学习报告") { AddTool("学习统计", () => SelectPage("学习统计")); AddTool("返回番茄钟", () => SelectPage("番茄钟")); }
+            if (page != "番茄钟" && page != "学习统计" && page != "学习报告") { var add = Ui.Button("＋ 添加", () => app.Edit(null, page == "全部" ? (DateTime?)null : page == "今天" ? DateTime.Today : selected), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
-            if (page == "学习统计") { if (studyStats == null) studyStats = new StudyStatsPanel(app); body.Children.Add(studyStats); studyStats.Refresh(true); }
+            if (page == "学习报告") { if (studyPeriod == null) studyPeriod = new StudyPeriodPanel(app); body.Children.Add(studyPeriod); studyPeriod.Refresh(true); }
+            else if (page == "学习统计") { if (studyStats == null) studyStats = new StudyStatsPanel(app); body.Children.Add(studyStats); studyStats.Refresh(true); }
             else if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
             else if (page == "月历") RenderCalendar(); else RenderList();
             int pending = app.Store.State.Items.Count(i => !i.Done);
-            status.Text = page == "番茄钟" || page == "学习统计" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
+            status.Text = page == "番茄钟" || page == "学习统计" || page == "学习报告" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
         }
         void AddTool(string text, Action action, double width = 0)
         {
@@ -143,7 +149,22 @@ namespace DeskTodo
             filter.Click += (s, e) => { showCompleted = filter.IsChecked == true; Refresh(); }; bar.Children.Add(filter);
             if (app.CanUndo) { var undo = Ui.Button("撤销删除", app.UndoDelete, "Quiet"); undo.Margin = new Thickness(20, 0, 0, 0); bar.Children.Add(undo); }
             var list = new StackPanel(); panel.Children.Add(Ui.Scroll(list));
-            var items = app.Store.State.Items.Where(i => showCompleted || !i.Done).ToList();
+            if (page == "全部")
+            {
+                var search = new TextBox { Text = taskSearch, Width = 280, MaxLength = 200, Margin = new Thickness(20, 0, 12, 0), ToolTip = "搜索标题、备注、地点和标签" }; System.Windows.Automation.AutomationProperties.SetName(search, "待办搜索"); bar.Children.Add(search);
+                var tagChoices = new[] { "全部标签" }.Concat(app.Store.State.Items.SelectMany(i => i.Tags).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t).Select(t => "#" + t)).ToList();
+                int tagIndex = taskTag == "" ? 0 : tagChoices.FindIndex(1, t => String.Equals(t, "#" + taskTag, StringComparison.OrdinalIgnoreCase)); if (tagIndex < 0) { tagIndex = 0; taskTag = ""; }
+                var tags = new ComboBox { Width = 150, ItemsSource = tagChoices, SelectedIndex = tagIndex }; System.Windows.Automation.AutomationProperties.SetName(tags, "待办标签筛选"); bar.Children.Add(tags);
+                search.TextChanged += (s, e) => { taskSearch = search.Text; FillList(list); };
+                tags.SelectionChanged += (s, e) => { taskTag = tags.SelectedIndex <= 0 ? "" : ((string)tags.SelectedItem).Substring(1); FillList(list); };
+                var clear = Ui.Button("清除", () => { search.Text = ""; tags.SelectedIndex = 0; }, "Quiet"); bar.Children.Add(clear);
+            }
+            FillList(list);
+        }
+        void FillList(StackPanel list)
+        {
+            list.Children.Clear();
+            var items = app.Store.State.Items.Where(i => (showCompleted || !i.Done) && (page != "全部" || TodoSearch.Matches(i, taskSearch, taskTag))).ToList();
             if (page == "今天")
             {
                 var overdue = items.Where(i => Dates.Overdue(i, DateTime.Today)).OrderByDescending(i => i.Important).ThenBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ToList();
@@ -155,7 +176,7 @@ namespace DeskTodo
             }
             else
             {
-                if (items.Count == 0) Ui.Empty(list, "还没有待办", "添加第一件事，也可以先不设日期");
+                if (items.Count == 0) Ui.Empty(list, "没有匹配的待办", "清除搜索或标签筛选，也可以添加新的待办");
                 else foreach (var group in items.GroupBy(TodoGroups.Key).OrderBy(g => g.All(i => i.Done)).ThenByDescending(g => g.Any(i => i.Important)).ThenBy(g => g.Min(i => i.Date ?? "9999-99-99")).ThenBy(g => g.Min(i => i.Time ?? "99:99")))
                 {
                     var occurrences = group.OrderBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
