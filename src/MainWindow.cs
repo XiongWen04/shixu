@@ -17,6 +17,7 @@ namespace DeskTodo
         readonly TextBlock status = Ui.Text("", 11, "Muted");
         readonly StackPanel tools = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         readonly Dictionary<string, Button> navigation = new Dictionary<string, Button>();
+        readonly HashSet<string> expandedGroups = new HashSet<string>();
         readonly Button widgetToggle;
         FocusPanel focusPanel;
         StudyStatsPanel studyStats;
@@ -118,7 +119,7 @@ namespace DeskTodo
                     preview.TextWrapping = TextWrapping.NoWrap; preview.TextTrimming = TextTrimming.CharacterEllipsis; preview.Margin = new Thickness(0, 0, 0, 5); if (item.Done) preview.TextDecorations = TextDecorations.Strikethrough; stack.Children.Add(preview);
                 }
                 if (items.Count > 2) stack.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
-                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(14, 14, 10, 8); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = new Thickness(0, 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
+                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = stack; day.Padding = new Thickness(14, 14, 10, 8); day.MinHeight = 0; day.Margin = new Thickness(0); day.BorderThickness = isSelected ? new Thickness(1) : new Thickness(0, 0, 1, 1); day.HorizontalContentAlignment = HorizontalAlignment.Stretch; day.VerticalContentAlignment = VerticalAlignment.Top;
                 day.SetResourceReference(Button.BackgroundProperty, isSelected ? "Soft" : "Surface"); day.SetResourceReference(Button.BorderBrushProperty, isSelected ? "Accent" : "Line");
                 System.Windows.Automation.AutomationProperties.SetName(day, date.ToString("yyyy年M月d日") + "，" + items.Count + " 件待办"); days.Children.Add(day);
             }
@@ -155,7 +156,24 @@ namespace DeskTodo
             else
             {
                 if (items.Count == 0) Ui.Empty(list, "还没有待办", "添加第一件事，也可以先不设日期");
-                else foreach (var item in items.OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Date ?? "9999-99-99").ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc)) list.Children.Add(Ui.TaskRow(app, item, false));
+                else foreach (var group in items.GroupBy(TodoGroups.Key).OrderBy(g => g.All(i => i.Done)).ThenByDescending(g => g.Any(i => i.Important)).ThenBy(g => g.Min(i => i.Date ?? "9999-99-99")).ThenBy(g => g.Min(i => i.Time ?? "99:99")))
+                {
+                    var occurrences = group.OrderBy(i => i.Date).ThenBy(i => i.Time ?? "99:99").ThenBy(i => i.CreatedUtc).ToList();
+                    if (occurrences.Count == 1 || (occurrences[0].SeriesId == null && occurrences.Select(i => i.Date).Distinct().Count() == 1)) { foreach (var occurrence in occurrences) list.Children.Add(Ui.TaskRow(app, occurrence, false)); continue; }
+                    string key = group.Key;
+                    var rule = app.Store.State.Series.FirstOrDefault(r => r.Id == occurrences[0].SeriesId);
+                    string name = rule == null ? occurrences[0].Title : rule.Template.Title;
+                    var heading = new StackPanel(); heading.Children.Add(Ui.Text((occurrences.Any(i => i.Important) ? "★ " : "") + name, 15, "Text", true));
+                    Func<string, string> formatDate = value => value == null ? "未设日期" : DateTime.ParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).ToString("yyyy/M/d"); string range = formatDate(occurrences[0].Date) + " – " + formatDate(occurrences.Last().Date);
+                    var summary = Ui.Text(range + "  ·  " + occurrences.Count + " 次  ·  " + occurrences.Count(i => !i.Done) + " 未完成  ·  点击展开", 11, "Muted"); summary.Margin = new Thickness(0, 5, 0, 0); heading.Children.Add(summary);
+                    var content = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+                    var expander = new Expander { Header = heading, Content = content, IsExpanded = expandedGroups.Contains(key), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                    expander.SetResourceReference(Expander.ForegroundProperty, "Text"); System.Windows.Automation.AutomationProperties.SetName(expander, "重复任务 " + name);
+                    Action fill = () => { if (content.Children.Count == 0) foreach (var occurrence in occurrences) content.Children.Add(Ui.TaskRow(app, occurrence, false)); };
+                    expander.Expanded += (s, e) => { expandedGroups.Add(key); summary.Text = range + "  ·  " + occurrences.Count + " 次  ·  " + occurrences.Count(i => !i.Done) + " 未完成  ·  点击收起"; fill(); };
+                    expander.Collapsed += (s, e) => { expandedGroups.Remove(key); summary.Text = range + "  ·  " + occurrences.Count + " 次  ·  " + occurrences.Count(i => !i.Done) + " 未完成  ·  点击展开"; }; if (expander.IsExpanded) { summary.Text = range + "  ·  " + occurrences.Count + " 次  ·  " + occurrences.Count(i => !i.Done) + " 未完成  ·  点击收起"; fill(); }
+                    var card = Ui.Card(expander, new Thickness(16)); card.Margin = new Thickness(0, 0, 0, 10); list.Children.Add(card);
+                }
             }
         }
     }

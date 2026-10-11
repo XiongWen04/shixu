@@ -16,6 +16,12 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            var repeatedA = Item("刷网课", "2026-10-11"); var repeatedB = Item("刷网课", "2026-10-12");
+            Check(TodoGroups.Key(repeatedA) == TodoGroups.Key(repeatedB), "identical dated tasks share display group without changing records");
+            repeatedB.Location = "不同地点"; Check(TodoGroups.Key(repeatedA) != TodoGroups.Key(repeatedB), "same title with different task content stays separate");
+            repeatedA.SeriesId = repeatedB.SeriesId = Guid.NewGuid().ToString("N"); Check(TodoGroups.Key(repeatedA) == TodoGroups.Key(repeatedB), "recurrence series remains grouped after individual edits");
+            repeatedA.SeriesId = null; repeatedA.Date = null; repeatedB.SeriesId = null; repeatedB.Date = null;
+            Check(TodoGroups.Key(repeatedA) != TodoGroups.Key(repeatedB), "undated tasks are not silently merged");
             var study = new TodoState();
             var openStudy = new TodoState(); var openStart = new DateTimeOffset(2026, 10, 9, 9, 0, 0, TimeSpan.FromHours(8));
             Study.Start(openStudy, "自由阅读", 0, openStart, true); Study.AddTime(openStudy, openStart, 50000);

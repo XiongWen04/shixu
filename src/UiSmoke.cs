@@ -232,6 +232,11 @@ namespace DeskTodo
                 var repeatToday = app.Store.State.Items.First(i => i.Title == "每日阅读" && i.Date == Dates.Key(DateTime.Today));
                 Check(repeatToday.Reminder && repeatToday.Important, "real editor saves reminder and importance");
                 app.Main.SelectPage("全部"); app.Main.UpdateLayout();
+                var recurringGroup = Controls<Expander>(app.Main).First(e => AutomationProperties.GetName(e) == "重复任务 每日阅读");
+                Check(!recurringGroup.IsExpanded && !Controls<CheckBox>(app.Main).Any(c => AutomationProperties.GetName(c) == "完成 每日阅读"), "all view collapses recurrence into a summary without loading repeated rows");
+                Capture(app.Main, Path.Combine(root, "all-grouped.png"));
+                recurringGroup.IsExpanded = true; app.Main.UpdateLayout();
+                Check(Controls<CheckBox>(app.Main).Count(c => AutomationProperties.GetName(c) == "完成 每日阅读") == 63, "expanding summary restores individually actionable occurrences");
                 Check(AutomationProperties.GetName(Controls<CheckBox>(app.Main).First(c => AutomationProperties.GetName(c).StartsWith("完成 "))) == "完成 每日阅读", "important pending tasks sort before other pending tasks");
                 var star = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "重要 每日阅读"); star.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(!app.Store.State.Items.First(i => i.Id == repeatToday.Id).Important && !DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Items.First(i => i.Id == repeatToday.Id).Important, "star toggles and persists on an individual occurrence");

@@ -8,6 +8,7 @@
     <Setter Property="SnapsToDevicePixels" Value="True"/>
   </Style>
   <Style TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     <Setter Property="Foreground" Value="{DynamicResource Text}"/>
     <Setter Property="Background" Value="{DynamicResource Panel}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
@@ -37,7 +38,7 @@
   <Style x:Key="CalendarDay" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
       <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Top"/></Border>
-      <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource Soft}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers>
+      <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource Soft}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Frame" Property="BorderThickness" Value="1"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="Quiet" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

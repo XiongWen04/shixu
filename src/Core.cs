@@ -26,6 +26,16 @@ namespace DeskTodo
         public TodoItem Copy() { return (TodoItem)MemberwiseClone(); }
     }
 
+    public static class TodoGroups
+    {
+        public static string Key(TodoItem item)
+        {
+            if (item.SeriesId != null) return "series:" + item.SeriesId;
+            if (item.Date == null) return "item:" + item.Id;
+            return "dated:" + String.Concat(new[] { item.Title, item.Time ?? "", item.Location ?? "", item.Note ?? "", item.Reminder.ToString() }.Select(value => value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value));
+        }
+    }
+
     [DataContract]
     public class TodoState
     {
