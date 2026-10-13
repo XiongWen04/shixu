@@ -49,7 +49,7 @@ namespace DeskTodo
             title.MaxHeight = compact ? 44 : 62;
             if (item.Done) title.TextDecorations = TextDecorations.Strikethrough;
             content.Children.Add(title);
-            if (flat) { content.Orientation = Orientation.Horizontal; title.Width = 240; title.TextWrapping = TextWrapping.NoWrap; title.TextTrimming = TextTrimming.CharacterEllipsis; }
+            if (flat) { title.TextWrapping = TextWrapping.NoWrap; title.TextTrimming = TextTrimming.CharacterEllipsis; title.ToolTip = item.Title; }
             string note = item.Note ?? "";
             if (!flat && !String.IsNullOrWhiteSpace(note)) { var n = Text(note, 11, "Muted"); n.MaxHeight = 34; n.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(n); }
             string date = item.Date == null ? "未设日期" : DateTime.ParseExact(item.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("M月d日");
@@ -57,7 +57,7 @@ namespace DeskTodo
             if (item.Reminder) date += " · 提醒";
             if (item.SeriesId != null) date += " · 重复";
             if (Dates.Overdue(item, DateTime.Today)) date += " · 逾期";
-            if (flat) date = (item.Time ?? "未指定时间") + (String.IsNullOrWhiteSpace(item.Location) ? "" : "  ·  " + item.Location);
+            if (flat) date = (Dates.Overdue(item, DateTime.Today) ? DateTime.ParseExact(item.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("M/d") + " · 逾期 · " : "") + (item.Time ?? "未指定时间") + (String.IsNullOrWhiteSpace(item.Location) ? "" : "  ·  " + item.Location);
             var label = Text(date, 10, Dates.Overdue(item, DateTime.Today) ? "Danger" : "Muted"); label.Margin = new Thickness(0, 6, 0, 0); content.Children.Add(label);
             if (!flat && !String.IsNullOrWhiteSpace(item.Location)) { var location = Text("地点：" + item.Location, 11, "Muted"); location.MaxHeight = 34; location.Margin = new Thickness(0, 4, 0, 0); location.ToolTip = item.Location; content.Children.Add(location); }
             if (!compact && item.Tags.Count > 0) { var tags = Text(String.Join("  ", item.Tags.Select(t => "#" + t)), 11, "Accent"); tags.Margin = new Thickness(0, 5, 0, 0); content.Children.Add(tags); }

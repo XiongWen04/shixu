@@ -97,6 +97,74 @@ namespace DeskTodo
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(path)) encoder.Save(file);
         }
+        public static void RunDesktop(AppController app, string root)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                app.Store.ChangeState(state =>
+                {
+                    state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "组会", Date = Dates.Key(today), Time = "15:00", Location = "B528", Tags = new List<string> { "会议" } });
+                    state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "整理资料", Date = Dates.Key(today), Time = "19:00", Tags = new List<string> { "科研" } });
+                    state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "实验报告初稿", Date = Dates.Key(today.AddDays(1)), Tags = new List<string> { "科研" } });
+                    state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "和导师沟通", Date = Dates.Key(today.AddDays(2)), Time = "14:00", Location = "办公室" });
+                    state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "逾期待办", Date = Dates.Key(today.AddDays(-1)) });
+                    Schedule.AddSeries(state, new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "刷网课", Date = Dates.Key(today), Tags = new List<string> { "日常" } }, "daily"); Schedule.Expand(state, today.AddDays(62));
+                    state.DailyGoalMinutes = 120;
+                    var from = new DateTimeOffset(today.AddHours(9), DateTimeOffset.Now.Offset);
+                    foreach (int duration in new[] { 25, 45, 8 }) { Study.Start(state, duration == 25 ? "阅读论文" : duration == 45 ? "复习笔记" : "学习英语", duration, from); Study.AddTime(state, from, duration * 60); Study.Finish(state, from.AddMinutes(duration), true); from = from.AddHours(2); }
+                });
+                string picture = Path.Combine(root, "sample-wallpaper.png"); var drawing = new DrawingVisual();
+                using (var dc = drawing.RenderOpen())
+                {
+                    dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(167, 198, 199), Color.FromRgb(53, 92, 75), 90), null, new Rect(0, 0, 1200, 800));
+                    dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(235, 235, 211)), null, new Point(960, 160), 90, 90);
+                    dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(111, 154, 141)), null, Geometry.Parse("M0,500 L200,250 350,450 580,230 770,420 1000,300 1200,460 1200,800 0,800 Z"));
+                    dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(63, 111, 91)), null, Geometry.Parse("M0,650 L280,430 500,650 680,420 860,610 1200,450 1200,800 0,800 Z"));
+                }
+                var bitmap = new RenderTargetBitmap(1200, 800, 96, 96, PixelFormats.Pbgra32); bitmap.Render(drawing); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); using (var file = File.Create(picture)) encoder.Save(file); app.ImportBackground(picture); app.SetBackgroundShade(0.4);
+                app.Main.SelectPage("月历"); app.Main.SelectDay(today); app.Main.UpdateLayout();
+                Check(app.Main.CalendarCellCount == 35 || app.Main.CalendarCellCount == 42, "small calendar retains full weeks");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "本月重复任务") && Controls<TextBlock>(app.Main).Any(t => t.Text == "明天 · 2 件"), "agenda displays following day and repeat summary");
+                Capture(app.Main, Path.Combine(root, "c-calendar-warm.png"));
+                var search = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "事项搜索"); search.Text = "B528"; app.Main.UpdateLayout();
+                Check(Controls<CheckBox>(app.Main).Count(c => AutomationProperties.GetName(c).StartsWith("完成 ")) == 1, "agenda search filters by location");
+                var meeting = Controls<CheckBox>(app.Main).First(c => AutomationProperties.GetName(c) == "完成 组会"); meeting.IsChecked = true; meeting.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); app.Main.UpdateLayout();
+                Check(app.Store.State.Items.First(i => i.Title == "组会").Done, "compact task completion persists through refresh");
+                search = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "事项搜索"); search.Text = "";
+                var nextDay = today.AddDays(1); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == nextDay.ToString("M月d日  dddd")), "clicking small calendar changes selected agenda");
+                app.Main.SelectPage("今天"); app.Main.UpdateLayout(); Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "逾期 · 1 件"), "today retains overdue task access");
+                foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-today-" + skin + ".png")); }
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-calendar-small.png"));
+                app.Main.SelectPage("番茄钟"); app.Main.UpdateLayout();
+                var timerCard = Controls<Border>(app.Main).First(b => AutomationProperties.GetName(b) == "居中专注卡片");
+                Check(timerCard.ActualWidth == 600 && timerCard.ActualHeight > 200, "timer is centered in bounded card at small size");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1小时18分") && Controls<TextBlock>(app.Main).Any(t => t.Text == "已学 78 分 · 还差 42 分"), "goal summary preserves actual time calculation");
+                var drawer = Controls<Expander>(app.Main).First(e => AutomationProperties.GetName(e) == "今日学习记录抽屉"); drawer.IsExpanded = false; drawer.IsExpanded = true; app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "复习笔记"), "learning drawer reopens recorded sessions");
+                drawer.IsExpanded = false; app.Main.UpdateLayout();
+                Check(Controls<ScrollViewer>(timerCard).First().ScrollableHeight < 2, "small window shows timer controls and complete goal without scrolling");
+                Capture(app.Main, Path.Combine(root, "c-focus-small.png")); app.Main.Width = 1160; app.Main.Height = 790; app.Main.UpdateLayout(); drawer.IsExpanded = true; app.Main.UpdateLayout();
+                var studyName = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习名称"); studyName.Text = "自由阅读";
+                var mode = Controls<ComboBox>(app.Main).First(c => AutomationProperties.GetName(c) == "学习计时模式"); mode.SelectedIndex = 1;
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "开始学习").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); for (int n = 0; n < 5; n++) Pump();
+                Check(app.FocusRunning && app.FocusSeconds > 0 && app.Store.State.ActiveFocus.IsCountUp, "centered count-up timer starts and advances");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "暂停").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); double stopped = app.FocusSeconds; Pump();
+                Check(!app.FocusRunning && app.FocusSeconds == stopped, "pause excludes elapsed wall time");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "继续").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "结束并记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Store.State.ActiveFocus == null && app.Store.State.FocusHistory.Last().Title == "自由阅读", "end records actual count-up session"); if (app.ReminderPopup != null) app.ReminderPopup.Close();
+                mode.SelectedIndex = 0; studyName.Text = "阅读论文"; foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-focus-" + skin + ".png")); }
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "学习统计").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout(); Check(Controls<StudyStatsPanel>(app.Main).Any(), "learning statistics remains reachable");
+                app.Main.SelectPage("番茄钟"); app.Main.UpdateLayout(); Controls<Button>(app.Main).First(b => (b.Content as string) == "周报 / 月报").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout(); Check(Controls<StudyPeriodPanel>(app.Main).Any(), "weekly and monthly reports remain reachable");
+                app.Main.SelectPage("全部"); app.Main.UpdateLayout(); var group = Controls<Expander>(app.Main).First(e => AutomationProperties.GetName(e) == "重复任务 刷网课"); Check(!group.IsExpanded, "all view retains collapsed recurrence groups");
+                Capture(app.Main, Path.Combine(root, "c-all.png"));
+                app.ResetBackground(); app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-calendar-default.png"));
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "DESKTOP C PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void RunBackground(AppController app, string root)
         {
             try
@@ -313,7 +381,7 @@ namespace DeskTodo
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "返回番茄钟").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var studyName = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习名称");
                 var studyMinutes = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "学习分钟");
-                { var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
+                { var shortcut = Controls<Expander>(app.Main).First(e => (e.Header as string) == "待办名称快捷填入"); shortcut.IsExpanded = true; app.Main.UpdateLayout(); var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
                 studyName.Text = "阅读论文"; studyMinutes.Text = "25";
                 Check(Controls<TextBlock>(app.Main).First(t => AutomationProperties.GetName(t) == "学习倒计时").Text == "25:00", "focus page previews custom duration");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "开始学习").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -374,7 +442,7 @@ namespace DeskTodo
                     exampleStart = exampleStart.AddHours(4);
                     Study.Start(state, "学习英语", 20, exampleStart); Study.AddTime(state, exampleStart, 480); Study.Finish(state, exampleStart.AddMinutes(8), false);
                 });
-                { var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
+                { var shortcut = Controls<Expander>(app.Main).First(e => (e.Header as string) == "待办名称快捷填入"); shortcut.IsExpanded = true; app.Main.UpdateLayout(); var learningTask = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("学习任务 ")); learningTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(studyName.Text == AutomationProperties.GetName(learningTask).Substring("学习任务 ".Length), "workbench task selection fills study name"); }
                 studyName.Text = "阅读论文"; studyMinutes.Text = "25";
                 app.Main.Refresh(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "focus-dashboard.png"));
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "复习笔记") && Controls<TextBlock>(app.Main).Any(t => t.Text.Contains("完成 2 次")), "today dashboard displays names and completed focus count");
@@ -406,7 +474,7 @@ namespace DeskTodo
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "早期学习记录"), "historical records outside current chart range remain accessible");
                 Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "统计截止日期").SelectedDate = DateTime.Today.AddDays(-45);
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1 天") && Controls<TextBlock>(app.Main).Any(t => t.Text == "1 次"), "changing chart cutoff loads older statistics");
-                Controls<Button>(app.Main).First(b => (b.Content as string) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "学习记录日期").SelectedDate == DateTime.Today, "today button restores current chart and record dates");
                 app.Store.ChangeState(state =>
                 {
@@ -417,7 +485,7 @@ namespace DeskTodo
                 Check(Controls<TextBlock>(app.Main).Count(t => t.Text.StartsWith("批次学习 ")) == 50, "large daily record lists initially render fifty sessions");
                 Controls<Button>(app.Main).First(b => (b.Content as string ?? "").StartsWith("加载更多")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(Controls<TextBlock>(app.Main).Count(t => t.Text.StartsWith("批次学习 ")) == 51, "load more reveals remaining records without dropping history");
-                Controls<Button>(app.Main).First(b => (b.Content as string) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "今天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-statistics-" + skin + ".png")); }
                 var statsPage = Controls<StudyStatsPanel>(app.Main).First(); statsPage.ScrollToBottom(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-records.png")); statsPage.ScrollToTop();
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "study-statistics-small.png")); app.Main.Width = 1160; app.Main.Height = 790;

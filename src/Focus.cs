@@ -118,7 +118,6 @@ namespace DeskTodo
         readonly StackPanel durationRow = new StackPanel { Orientation = Orientation.Horizontal };
         readonly TextBlock countdown = Ui.Text("25:00", 66, "Accent", true);
         readonly TextBlock phase = Ui.Text("准备开始", 13, "Muted");
-        readonly TextBlock dayLabel = Ui.Text("", 12, "Muted");
         readonly TextBlock total = Ui.Text("00:00", 32, "Text", true);
         readonly TextBlock count = Ui.Text("", 12, "Muted");
         readonly StackPanel history = new StackPanel();
@@ -134,35 +133,35 @@ namespace DeskTodo
         public FocusPanel(AppController controller)
         {
             app = controller;
-            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
-            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-            RowDefinitions.Add(new RowDefinition()); RowDefinitions.Add(new RowDefinition { Height = new GridLength(136) });
-            var timerPanel = new StackPanel(); timerPanel.Children.Add(Ui.Text("这次学什么", 18, "Text", true));
-            name.FontSize = 23; name.FontWeight = FontWeights.SemiBold; name.Height = 44; name.Padding = new Thickness(8, 0, 8, 0); name.VerticalContentAlignment = VerticalAlignment.Center; name.Background = Brushes.Transparent; name.Margin = new Thickness(0, 6, 0, 10); AutomationProperties.SetName(name, "学习名称"); timerPanel.Children.Add(name);
-            AutomationProperties.SetName(mode, "学习计时模式"); mode.Visibility = Visibility.Collapsed; timerPanel.Children.Add(mode); var modeBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 12) }; downMode = Ui.Button("倒计时", () => mode.SelectedIndex = 0, "Quiet"); upMode = Ui.Button("正向计时", () => mode.SelectedIndex = 1, "Quiet"); modeBar.Children.Add(downMode); modeBar.Children.Add(upMode); timerPanel.Children.Add(modeBar);
-            var label = Ui.Text("专注时长", 13, "Muted"); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 12, 0); durationRow.Children.Add(label);
-            AutomationProperties.SetName(minutes, "学习分钟"); durationRow.Children.Add(minutes);
-            var unit = Ui.Text("分钟 · 1–720", 12, "Muted"); unit.Margin = new Thickness(12, 0, 0, 0); unit.VerticalAlignment = VerticalAlignment.Center; durationRow.Children.Add(unit); timerPanel.Children.Add(durationRow);
-            countdown.FontSize = 82; countdown.FontFamily = new FontFamily("Consolas"); countdown.HorizontalAlignment = HorizontalAlignment.Center; countdown.Margin = new Thickness(0, 12, 0, 4); AutomationProperties.SetName(countdown, "学习倒计时"); timerPanel.Children.Add(countdown);
-            phase.HorizontalAlignment = HorizontalAlignment.Center; phase.Margin = new Thickness(0, 0, 0, 10); timerPanel.Children.Add(phase);
+            RowDefinitions.Add(new RowDefinition()); RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var timerPanel = new StackPanel();
+            name.FontSize = 23; name.FontWeight = FontWeights.SemiBold; name.Height = 44; name.Padding = new Thickness(12, 0, 12, 0); name.BorderThickness = new Thickness(1); name.VerticalContentAlignment = VerticalAlignment.Center; name.Margin = new Thickness(0, 0, 0, 12); AutomationProperties.SetName(name, "学习名称"); timerPanel.Children.Add(name);
+            AutomationProperties.SetName(mode, "学习计时模式"); mode.Visibility = Visibility.Collapsed; timerPanel.Children.Add(mode);
+            var modeBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 10) }; downMode = Ui.Button("倒计时", () => mode.SelectedIndex = 0, "Quiet"); upMode = Ui.Button("正向计时", () => mode.SelectedIndex = 1, "Quiet"); modeBar.Children.Add(downMode); modeBar.Children.Add(upMode); timerPanel.Children.Add(modeBar);
+            durationRow.HorizontalAlignment = HorizontalAlignment.Center;
+            var label = Ui.Text("专注时长", 12, "Muted"); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 10, 0); durationRow.Children.Add(label); AutomationProperties.SetName(minutes, "学习分钟"); durationRow.Children.Add(minutes);
+            var unit = Ui.Text("分钟", 12, "Muted"); unit.Margin = new Thickness(10, 0, 0, 0); unit.VerticalAlignment = VerticalAlignment.Center; durationRow.Children.Add(unit); timerPanel.Children.Add(durationRow);
+            countdown.FontSize = 76; countdown.FontFamily = new FontFamily("Consolas"); countdown.HorizontalAlignment = HorizontalAlignment.Center; countdown.Margin = new Thickness(0, 6, 0, 0); AutomationProperties.SetName(countdown, "学习倒计时"); timerPanel.Children.Add(countdown);
+            phase.HorizontalAlignment = HorizontalAlignment.Center; phase.Margin = new Thickness(0, 0, 0, 12); timerPanel.Children.Add(phase);
             var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            start = Ui.Button("开始学习", () => { int value = 0; bool countUp = mode.SelectedIndex == 1; if (String.IsNullOrWhiteSpace(name.Text) || (!countUp && (!Int32.TryParse(minutes.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out value) || value < 1 || value > 720))) { phase.Text = countUp ? "请填写学习名称" : "请填写名称和 1–720 分钟的时长"; return; } app.StartFocus(name.Text, value, countUp); }, "Primary"); controls.Children.Add(start);
-            pause = Ui.Button("暂停", () => { if (app.FocusRunning) app.PauseFocus(); else app.ResumeFocus(); }); pause.Margin = new Thickness(10, 0, 0, 0); controls.Children.Add(pause); timerPanel.Children.Add(controls);
-            finish = Ui.Button("结束并记录", () => app.FinishFocus(app.Store.State.ActiveFocus != null && app.Store.State.ActiveFocus.IsCountUp), "Quiet"); finish.Margin = new Thickness(8, 0, 0, 0); controls.Children.Add(finish);
-            var hint = Ui.Text("暂停时间不计入学习时长。关闭主窗口仍计时，彻底退出或休眠时暂停。", 11, "Muted"); hint.Visibility = Visibility.Collapsed; timerPanel.Children.Add(hint);
-            var timerCard = Ui.Card(Ui.Scroll(timerPanel), new Thickness(24)); timerCard.Margin = new Thickness(20, 0, 0, 14); timerCard.BorderThickness = new Thickness(0); Grid.SetColumn(timerCard, 1); Children.Add(timerCard);
-            var stats = new DockPanel(); var listHeader = new DockPanel(); DockPanel.SetDock(listHeader, Dock.Top); stats.Children.Add(listHeader);
-            var addTask = Ui.Button("＋ 添加待办", () => app.Edit(null, DateTime.Today), "Quiet"); DockPanel.SetDock(addTask, Dock.Right); listHeader.Children.Add(addTask); listHeader.Children.Add(Ui.Text("今日任务与记录", 17, "Text", true));
-            var listContent = new StackPanel(); listContent.Children.Add(taskList); var recorded = Ui.Text("已记录的学习", 12, "Muted"); recorded.Margin = new Thickness(0, 18, 0, 12); listContent.Children.Add(recorded); listContent.Children.Add(history);
-            stats.Children.Add(Ui.Scroll(listContent)); var statsCard = Ui.Card(stats, new Thickness(16)); statsCard.BorderThickness = new Thickness(0); statsCard.Margin = new Thickness(0, 0, 0, 14); Children.Add(statsCard);
-            var band = new Grid(); band.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) }); band.ColumnDefinitions.Add(new ColumnDefinition()); band.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-            var summary = new StackPanel(); summary.Children.Add(Ui.Text("今日学习", 14, "Text", true)); dayLabel.Margin = new Thickness(0, 3, 0, 5); summary.Children.Add(dayLabel); total.FontSize = 30; summary.Children.Add(total); summary.Children.Add(count); band.Children.Add(summary);
-            var trendPanel = new StackPanel(); trendPanel.Children.Add(Ui.Text("近7天学习时长 · 分钟", 11, "Muted")); trend.Margin = new Thickness(0, 6, 0, 0); trendPanel.Children.Add(trend); Grid.SetColumn(trendPanel, 1); band.Children.Add(trendPanel);
-            var goal = new StackPanel { Margin = new Thickness(20, 0, 0, 0) }; goal.Children.Add(Ui.Text("每日学习目标", 14, "Text", true));
-            var goalRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0) }; goalMinutes.Text = app.Store.State.DailyGoalMinutes.ToString(); AutomationProperties.SetName(goalMinutes, "每日目标分钟"); goalRow.Children.Add(goalMinutes);
+            start = Ui.Button("开始学习", () => { int value = 0; bool countUp = mode.SelectedIndex == 1; if (String.IsNullOrWhiteSpace(name.Text) || (!countUp && (!Int32.TryParse(minutes.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out value) || value < 1 || value > 720))) { phase.Text = countUp ? "请填写学习名称" : "请填写名称和 1–720 分钟的时长"; return; } app.StartFocus(name.Text, value, countUp); }, "Primary"); start.MinWidth = 130; controls.Children.Add(start);
+            pause = Ui.Button("暂停", () => { if (app.FocusRunning) app.PauseFocus(); else app.ResumeFocus(); }); pause.Margin = new Thickness(10, 0, 0, 0); controls.Children.Add(pause);
+            finish = Ui.Button("结束并记录", () => app.FinishFocus(app.Store.State.ActiveFocus != null && app.Store.State.ActiveFocus.IsCountUp), "Quiet"); finish.Margin = new Thickness(8, 0, 0, 0); controls.Children.Add(finish); timerPanel.Children.Add(controls);
+            var goal = new Grid { Margin = new Thickness(0, 12, 0, 0) }; goal.ColumnDefinitions.Add(new ColumnDefinition()); goal.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+            var target = new StackPanel(); target.Children.Add(Ui.Text("每日学习目标", 13, "Text", true));
+            var goalRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 4) }; goalMinutes.Text = app.Store.State.DailyGoalMinutes.ToString(); AutomationProperties.SetName(goalMinutes, "每日目标分钟"); goalRow.Children.Add(goalMinutes);
             var goalUnit = Ui.Text("分钟", 11, "Muted"); goalUnit.VerticalAlignment = VerticalAlignment.Center; goalUnit.Margin = new Thickness(7, 0, 7, 0); goalRow.Children.Add(goalUnit);
-            var saveGoal = Ui.Button("设置", () => { int value; if (!Int32.TryParse(goalMinutes.Text.Trim(), out value) || value < 0 || value > 1440) { goalStatus.Text = "请输入 0–1440 分钟"; return; } if (app.SetDailyGoal(value)) Refresh(); }); AutomationProperties.SetName(saveGoal, "保存每日目标"); saveGoal.Padding = new Thickness(8, 4, 8, 4); goalRow.Children.Add(saveGoal); goal.Children.Add(goalRow); goal.Children.Add(goalStatus); goalProgress.SetResourceReference(ProgressBar.ForegroundProperty, "Accent"); goalProgress.SetResourceReference(ProgressBar.BackgroundProperty, "Soft"); goal.Children.Add(goalProgress); Grid.SetColumn(goal, 2); band.Children.Add(goal);
-            var bandCard = Ui.Card(band, new Thickness(16)); Grid.SetRow(bandCard, 1); Grid.SetColumnSpan(bandCard, 2); Children.Add(bandCard);
+            var saveGoal = Ui.Button("设置", () => { int value; if (!Int32.TryParse(goalMinutes.Text.Trim(), out value) || value < 0 || value > 1440) { goalStatus.Text = "请输入 0–1440 分钟"; return; } if (app.SetDailyGoal(value)) Refresh(); }); AutomationProperties.SetName(saveGoal, "保存每日目标"); saveGoal.Padding = new Thickness(8, 4, 8, 4); goalRow.Children.Add(saveGoal); target.Children.Add(goalRow); target.Children.Add(goalStatus); goalProgress.SetResourceReference(ProgressBar.ForegroundProperty, "Accent"); goalProgress.SetResourceReference(ProgressBar.BackgroundProperty, "Soft"); target.Children.Add(goalProgress); goal.Children.Add(target);
+            var summary = new StackPanel { Margin = new Thickness(20, 0, 0, 0) }; summary.Children.Add(Ui.Text("今日已学", 12, "Muted")); total.FontSize = 20; total.Margin = new Thickness(0, 8, 0, 6); summary.Children.Add(total); count.FontSize = 10; summary.Children.Add(count); Grid.SetColumn(summary, 1); goal.Children.Add(summary); timerPanel.Children.Add(goal);
+            var timerCard = Ui.Card(Ui.Scroll(timerPanel), new Thickness(20)); timerCard.Width = 600; timerCard.MaxHeight = 490; timerCard.HorizontalAlignment = HorizontalAlignment.Center; timerCard.VerticalAlignment = VerticalAlignment.Center; timerCard.Margin = new Thickness(0, 0, 0, 14); AutomationProperties.SetName(timerCard, "居中专注卡片"); Children.Add(timerCard);
+            var shelf = new DockPanel(); var links = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(links, Dock.Right); shelf.Children.Add(links); links.Children.Add(Ui.Button("学习统计", () => app.Main.SelectPage("学习统计"), "Quiet")); links.Children.Add(Ui.Button("周报 / 月报", () => app.Main.SelectPage("学习报告"), "Quiet"));
+            var details = new StackPanel(); details.Children.Add(history);
+            var shortcuts = new Expander { Header = "待办名称快捷填入", Content = taskList, Margin = new Thickness(0, 12, 0, 0) }; shortcuts.SetResourceReference(Expander.ForegroundProperty, "Muted"); details.Children.Add(shortcuts);
+            var trendPanel = new StackPanel(); trendPanel.Children.Add(Ui.Text("近7天学习时长 · 分钟", 11, "Muted")); trend.Margin = new Thickness(0, 6, 0, 0); trendPanel.Children.Add(trend); var trendDrawer = new Expander { Header = "近7天趋势", Content = trendPanel, Margin = new Thickness(0, 10, 0, 0) }; trendDrawer.SetResourceReference(Expander.ForegroundProperty, "Muted"); details.Children.Add(trendDrawer);
+            shelf.Children.Add(Ui.Text("今日学习记录", 13, "Text", true)); links.VerticalAlignment = VerticalAlignment.Top;
+            var drawer = new Expander { Header = shelf, Content = Ui.Scroll(details), IsExpanded = true, MaxHeight = 130, HorizontalContentAlignment = HorizontalAlignment.Stretch }; AutomationProperties.SetName(drawer, "今日学习记录抽屉"); drawer.SetResourceReference(Expander.ForegroundProperty, "Text");
+            var shelfCard = Ui.Card(drawer, new Thickness(18, 8, 18, 8)); shelfCard.MaxWidth = 900; shelfCard.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetRow(shelfCard, 1); Children.Add(shelfCard);
+            SizeChanged += (s, e) => { bool compact = ActualHeight < 540; timerPanel.LayoutTransform = new ScaleTransform(compact ? 0.88 : 1, compact ? 0.88 : 1); if (compact) drawer.IsExpanded = false; };
             minutes.TextChanged += (s, e) => { if (app.Store.State.ActiveFocus == null) { int value; if (Int32.TryParse(minutes.Text, out value) && value >= 1 && value <= 720) countdown.Text = Study.FormatDuration(value * 60); } };
             mode.SelectionChanged += (s, e) => Refresh();
             Refresh();
@@ -177,10 +176,10 @@ namespace DeskTodo
             pause.Content = active == null || app.FocusRunning ? "暂停" : "继续"; AutomationProperties.SetName(pause, pause.Content.ToString());
             if (active != null) { countdown.Text = Study.FormatDuration(active.IsCountUp ? app.FocusSeconds : Math.Ceiling(Math.Max(0, active.TargetSeconds - app.FocusSeconds))); phase.Text = app.FocusRunning ? active.IsCountUp ? "正向计时中 · 随时结束并记录" : "专注中 · 一次只做一件事" : "已暂停 · 可继续本次学习"; }
             else { int value; countdown.Text = Study.FormatDuration(mode.SelectedIndex == 0 && Int32.TryParse(minutes.Text, out value) && value > 0 && value <= 720 ? value * 60 : 0); phase.Text = mode.SelectedIndex == 1 ? "无需预设时长，从 00:00 开始" : "准备开始"; }
-            var today = DateTime.Today; dayLabel.Text = today.ToString("M月d日 dddd");
+            var today = DateTime.Today;
             var records = app.Store.State.FocusHistory.Where(f => Study.SecondsOn(f, today) > 0 || DateTimeOffset.ParseExact(f.EndedAt, "o", CultureInfo.InvariantCulture).Date == today).ToList();
             double seconds = records.Sum(f => Study.SecondsOn(f, today)); var current = app.FocusSnapshot(); if (current != null) seconds += Study.SecondsOn(current, today);
-            total.Text = Study.FormatDuration(seconds);
+            total.Text = seconds >= 3600 ? ((int)(seconds / 3600)) + "小时" + ((int)(seconds % 3600 / 60)) + "分" : ((int)(seconds / 60)) + "分";
             int target = app.Store.State.DailyGoalMinutes; goalProgress.Value = target == 0 ? 0 : Math.Min(100, seconds / (target * 60) * 100); goalProgress.Visibility = target == 0 ? Visibility.Collapsed : Visibility.Visible;
             goalStatus.Text = target == 0 ? "未设置目标 · 填 0 可关闭" : seconds >= target * 60 ? "今日目标已达成 ✓" : "已学 " + (int)(seconds / 60) + " 分 · 还差 " + (int)Math.Ceiling(target - seconds / 60) + " 分";
             if (!goalMinutes.IsKeyboardFocusWithin) goalMinutes.Text = target.ToString();
@@ -193,11 +192,11 @@ namespace DeskTodo
             if (records.Count == 0) Ui.Empty(history, "今天还没有学习记录", "结束一次学习后，记录会出现在这里");
             foreach (var record in records.OrderByDescending(f => DateTimeOffset.ParseExact(f.StartedAt, "o", CultureInfo.InvariantCulture)))
             {
-                var row = new StackPanel(); row.Children.Add(Ui.Text(record.Title, 14, "Text", true));
-                var duration = Ui.Text("今日 " + Study.FormatDuration(Study.SecondsOn(record, today)) + (record.IsCountUp ? "  ·  正向计时" : "  ·  计划 " + (record.TargetSeconds / 60) + " 分钟"), 12, "Muted"); duration.Margin = new Thickness(0, 6, 0, 4); row.Children.Add(duration);
+                var row = new Grid { Margin = new Thickness(0, 7, 0, 7) }; row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+                var title = Ui.Text(record.Title, 13, "Text", true); title.TextWrapping = TextWrapping.NoWrap; title.TextTrimming = TextTrimming.CharacterEllipsis; title.ToolTip = record.Title; row.Children.Add(title);
+                var duration = Ui.Text((Study.SecondsOn(record, today) / 60).ToString("0.#") + " 分钟", 12, "Accent"); Grid.SetColumn(duration, 1); row.Children.Add(duration);
                 var from = DateTimeOffset.ParseExact(record.StartedAt, "o", CultureInfo.InvariantCulture); var to = DateTimeOffset.ParseExact(record.EndedAt, "o", CultureInfo.InvariantCulture);
-                row.Children.Add(Ui.Text(from.ToString("M/d HH:mm") + " – " + to.ToString("M/d HH:mm") + "  ·  " + (record.Completed ? "已完成" : "提前结束"), 11, record.Completed ? "Accent" : "Muted"));
-                var card = Ui.Card(row, new Thickness(14)); card.Margin = new Thickness(0, 0, 0, 10); history.Children.Add(card);
+                var state = Ui.Text(from.ToString("HH:mm") + "–" + to.ToString("HH:mm") + " · " + (record.Completed ? "完成" : "提前结束"), 10, "Muted"); Grid.SetColumn(state, 2); row.Children.Add(state); row.ToolTip = from.ToString("M/d HH:mm") + " – " + to.ToString("M/d HH:mm") + (record.IsCountUp ? " · 正向计时" : " · 计划 " + record.TargetSeconds / 60 + " 分钟"); history.Children.Add(row);
             }
         }
         void RefreshTasksAndTrend(DateTime today, FocusSession current)
