@@ -90,7 +90,7 @@ namespace DeskTodo
             if (page == "学习报告") { if (studyPeriod == null) studyPeriod = new StudyPeriodPanel(app); body.Children.Add(studyPeriod); studyPeriod.Refresh(true); }
             else if (page == "学习统计") { if (studyStats == null) studyStats = new StudyStatsPanel(app); body.Children.Add(studyStats); studyStats.Refresh(true); }
             else if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
-            else if (page == "月历" || page == "今天") RenderCalendar(); else RenderList();
+            else if (page == "月历") RenderCalendar(); else if (page == "今天") RenderAgenda(); else RenderList();
             int pending = app.Store.State.Items.Count(i => !i.Done);
             status.Text = page == "番茄钟" || page == "学习统计" || page == "学习报告" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
         }
@@ -99,6 +99,46 @@ namespace DeskTodo
             var b = Ui.Button(text, action); b.Padding = new Thickness(10, 8, 10, 8); if (width > 0) b.Width = width; b.Margin = new Thickness(5, 0, 0, 0); tools.Children.Add(b);
         }
         void RenderCalendar()
+        {
+            body.ColumnDefinitions.Add(new ColumnDefinition()); body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(350) });
+            var calendar = new Grid(); calendar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); calendar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) }); calendar.RowDefinitions.Add(new RowDefinition());
+            var monthBar = new DockPanel { Margin = new Thickness(0, 0, 0, 16) }; var today = Ui.Button("今天", () => SelectDay(DateTime.Today)); DockPanel.SetDock(today, Dock.Right); monthBar.Children.Add(today);
+            var monthControls = new StackPanel { Orientation = Orientation.Horizontal }; monthControls.Children.Add(Ui.Button("‹", () => SelectDay(Month.AddMonths(-1)))); var nextMonth = Ui.Button("›", () => SelectDay(Month.AddMonths(1))); nextMonth.Margin = new Thickness(6, 0, 14, 0); monthControls.Children.Add(nextMonth); var month = Ui.Text(Month.ToString("yyyy年M月"), 21, "Text", true); month.VerticalAlignment = VerticalAlignment.Center; monthControls.Children.Add(month); monthBar.Children.Add(monthControls); calendar.Children.Add(monthBar);
+            var weekdays = new UniformGrid { Rows = 1, Columns = 7 }; foreach (string name in new[] { "周一", "周二", "周三", "周四", "周五", "周六", "周日" }) { var label = Ui.Text(name, 11, "Muted"); label.TextAlignment = TextAlignment.Center; weekdays.Children.Add(label); } Grid.SetRow(weekdays, 1); calendar.Children.Add(weekdays);
+            var start = Dates.GridStart(Month); int cells = (int)Math.Ceiling(((Month - start).Days + DateTime.DaysInMonth(Month.Year, Month.Month)) / 7.0) * 7; CalendarCellCount = cells;
+            var days = new UniformGrid { Columns = 7, Rows = cells / 7 }; Grid.SetRow(days, 2); calendar.Children.Add(days);
+            for (int n = 0; n < cells; n++)
+            {
+                var date = start.AddDays(n); bool active = date == selected, current = date.Month == Month.Month;
+                var content = new StackPanel(); var number = Ui.Text(date.Day.ToString(), 14, active ? "AccentInk" : current ? "Text" : "Muted", active || date == DateTime.Today); number.TextAlignment = TextAlignment.Center; number.VerticalAlignment = VerticalAlignment.Center;
+                var badge = new Border { Child = number, Width = 28, Height = 28, CornerRadius = new CornerRadius(14), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 6) }; if (active) badge.SetResourceReference(Border.BackgroundProperty, "Accent"); content.Children.Add(badge);
+                var items = app.Store.State.Items.Where(i => i.Date == Dates.Key(date)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ToList();
+                foreach (var item in items.Take(2)) { var text = Ui.Text((item.Done ? "✓ " : item.SeriesId != null ? "↻ " : "• ") + (item.Time == null ? "" : item.Time + " ") + item.Title, 10, item.Done || !current ? "Muted" : "Text"); text.TextWrapping = TextWrapping.NoWrap; text.TextTrimming = TextTrimming.CharacterEllipsis; if (item.Done) text.TextDecorations = TextDecorations.Strikethrough; content.Children.Add(text); }
+                if (items.Count > 2) content.Children.Add(Ui.Text("另有 " + (items.Count - 2) + " 件", 9, "Muted"));
+                var day = Ui.Button("", () => SelectDay(date), "CalendarDay"); day.Content = content; day.Padding = new Thickness(9, 7, 4, 4); day.MinHeight = 0; day.BorderThickness = active ? new Thickness(1) : new Thickness(n % 7 == 0 ? 1 : 0, n < 7 ? 1 : 0, 1, 1); day.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "MainCanvas"); day.SetResourceReference(Button.BorderBrushProperty, active ? "Accent" : "Line"); System.Windows.Automation.AutomationProperties.SetName(day, date.ToString("yyyy年M月d日") + "，" + items.Count + " 件待办"); days.Children.Add(day);
+            }
+            var calendarCard = Ui.Card(calendar, new Thickness(16)); calendarCard.Margin = new Thickness(0, 0, 16, 0); body.Children.Add(calendarCard);
+            var detail = new DockPanel(); var title = new DockPanel { Margin = new Thickness(0, 0, 0, 12) }; var dateControls = new StackPanel { Orientation = Orientation.Horizontal }; dateControls.Children.Add(Ui.Button("‹", () => SelectDay(selected.AddDays(-1)), "Quiet")); dateControls.Children.Add(Ui.Button("›", () => SelectDay(selected.AddDays(1)), "Quiet")); DockPanel.SetDock(dateControls, Dock.Right); title.Children.Add(dateControls); var labelDate = new StackPanel(); labelDate.Children.Add(Ui.Text(selected.ToString("M月d日  ddd"), 20, "Text", true)); var selectedItems = app.Store.State.Items.Where(i => i.Date == Dates.Key(selected)).OrderBy(i => i.Done).ThenByDescending(i => i.Important).ThenBy(i => i.Time ?? "99:99").ToList(); labelDate.Children.Add(Ui.Text(selectedItems.Count + " 件待办 · ★ " + selectedItems.Count(i => i.Important), 11, "Muted")); title.Children.Add(labelDate); DockPanel.SetDock(title, Dock.Top); detail.Children.Add(title);
+            var quickPane = new DockPanel { Margin = new Thickness(0, 16, 0, 0) }; DockPanel.SetDock(quickPane, Dock.Bottom); detail.Children.Add(quickPane); var actions = new StackPanel(); DockPanel.SetDock(actions, Dock.Bottom); quickPane.Children.Add(actions); var quick = new StackPanel(); var quickViewport = Ui.Scroll(quick); quickViewport.MaxHeight = 260; quickPane.Children.Add(quickViewport); quick.Children.Add(Ui.Text("快速添加任务", 15, "Text", true)); quick.Children.Add(Ui.Text("任务标题", 10, "Muted"));
+            var taskTitle = new TextBox { MaxLength = 200, Height = 32, Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 4, 0, 8), ToolTip = "任务标题（必填）" }; System.Windows.Automation.AutomationProperties.SetName(taskTitle, "快速待办标题"); quick.Children.Add(taskTitle);
+            var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+            var datePicker = new DatePicker { SelectedDate = selected, Padding = new Thickness(2), FirstDayOfWeek = DayOfWeek.Monday, Margin = new Thickness(0, 0, 8, 0) }; System.Windows.Automation.AutomationProperties.SetName(datePicker, "快速待办日期"); row.Children.Add(datePicker);
+            var time = new TextBox { MaxLength = 5, Height = 36, Padding = new Thickness(8, 3, 8, 3), ToolTip = "时间，可选，格式 HH:mm" }; System.Windows.Automation.AutomationProperties.SetName(time, "快速待办时间"); var timeBox = new Grid(); timeBox.Children.Add(time); var timeHint = Ui.Text("HH:mm", 11, "Muted"); timeHint.IsHitTestVisible = false; timeHint.VerticalAlignment = VerticalAlignment.Center; timeHint.Margin = new Thickness(8, 0, 0, 0); timeBox.Children.Add(timeHint); time.TextChanged += (s, e) => timeHint.Visibility = time.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; Grid.SetColumn(timeBox, 1); row.Children.Add(timeBox); quick.Children.Add(row);
+            var locationLabel = Ui.Text("地点（可选）", 10, "Muted"); locationLabel.Margin = new Thickness(0, 7, 0, 3); quick.Children.Add(locationLabel); var location = new TextBox { MaxLength = 200 }; System.Windows.Automation.AutomationProperties.SetName(location, "快速待办地点"); quick.Children.Add(location);
+            var tagLabel = Ui.Text("标签（逗号分隔）", 10, "Muted"); tagLabel.Margin = new Thickness(0, 7, 0, 3); quick.Children.Add(tagLabel); var tags = new TextBox { MaxLength = 220 }; System.Windows.Automation.AutomationProperties.SetName(tags, "快速待办标签"); quick.Children.Add(tags);
+            location.Height = tags.Height = 32; location.Padding = tags.Padding = new Thickness(8, 3, 8, 3);
+            var important = new CheckBox { Content = "重要任务", Margin = new Thickness(0, 8, 0, 0) }; quick.Children.Add(important); var error = Ui.Text("", 11, "Danger"); actions.Children.Add(error);
+            var save = Ui.Button("＋ 添加任务", () =>
+            {
+                var item = new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = taskTitle.Text.Trim(), Date = datePicker.SelectedDate.HasValue ? Dates.Key(datePicker.SelectedDate.Value) : null, Time = String.IsNullOrWhiteSpace(time.Text) ? null : time.Text.Trim(), Location = String.IsNullOrWhiteSpace(location.Text) ? null : location.Text.Trim(), Tags = TodoSearch.ParseTags(tags.Text), Important = important.IsChecked == true, CreatedUtc = DateTime.UtcNow.ToString("o") };
+                try { if (!datePicker.SelectedDate.HasValue) throw new InvalidOperationException("请选择日期。"); new TodoState { Items = new List<TodoItem> { item } }.Validate(); }
+                catch (Exception ex) { error.Text = ex.Message; return; }
+                app.SaveTodo(item, null, null);
+            }, "Primary"); save.Margin = new Thickness(0, 8, 0, 0); actions.Children.Add(save); if (app.CanUndo) actions.Children.Add(Ui.Button("撤销删除", app.UndoDelete, "Quiet"));
+            var list = new StackPanel(); if (selectedItems.Count == 0) Ui.Empty(list, "这一天还没有安排", "在下方添加一件事"); foreach (var item in selectedItems) list.Children.Add(Ui.TaskRow(app, item, false, true)); detail.Children.Add(Ui.Scroll(list));
+            var detailCard = Ui.Card(detail, new Thickness(18)); Grid.SetColumn(detailCard, 1); body.Children.Add(detailCard);
+        }
+        void RenderAgenda()
         {
             body.ColumnDefinitions.Add(new ColumnDefinition()); body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(350) });
             var agenda = new DockPanel(); var agendaHeader = new StackPanel(); DockPanel.SetDock(agendaHeader, Dock.Top); agenda.Children.Add(agendaHeader);

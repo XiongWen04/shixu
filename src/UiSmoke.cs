@@ -123,7 +123,7 @@ namespace DeskTodo
                     dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(63, 111, 91)), null, Geometry.Parse("M0,650 L280,430 500,650 680,420 860,610 1200,450 1200,800 0,800 Z"));
                 }
                 var bitmap = new RenderTargetBitmap(1200, 800, 96, 96, PixelFormats.Pbgra32); bitmap.Render(drawing); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); using (var file = File.Create(picture)) encoder.Save(file); app.ImportBackground(picture); app.SetBackgroundShade(0.4);
-                app.Main.SelectPage("月历"); app.Main.SelectDay(today); app.Main.UpdateLayout();
+                app.Main.SelectPage("今天"); app.Main.SelectDay(today); app.Main.UpdateLayout();
                 Check(app.Main.CalendarCellCount == 35 || app.Main.CalendarCellCount == 42, "small calendar retains full weeks");
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "本月重复任务") && Controls<TextBlock>(app.Main).Any(t => t.Text == "明天 · 2 件"), "agenda displays following day and repeat summary");
                 Capture(app.Main, Path.Combine(root, "c-calendar-warm.png"));
@@ -133,7 +133,7 @@ namespace DeskTodo
                 Check(app.Store.State.Items.First(i => i.Title == "组会").Done, "compact task completion persists through refresh");
                 search = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "事项搜索"); search.Text = "";
                 var nextDay = today.AddDays(1); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
-                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == nextDay.ToString("M月d日  dddd")), "clicking small calendar changes selected agenda");
+                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "快速待办日期").SelectedDate == nextDay, "clicking small calendar switches to selected monthly details");
                 app.Main.SelectPage("今天"); app.Main.UpdateLayout(); Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "逾期 · 1 件"), "today retains overdue task access");
                 foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-today-" + skin + ".png")); }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-calendar-small.png"));
@@ -195,7 +195,16 @@ namespace DeskTodo
         {
             try
             {
-                app.Main.SelectDay(new DateTime(2026, 10, 11));
+                app.Main.SelectDay(new DateTime(2026, 10, 11)); app.Main.UpdateLayout();
+                var quickTitle = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标题"); quickTitle.Text = "组会";
+                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办时间").Text = "15:00";
+                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办地点").Text = "B528";
+                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标签").Text = "会议，科研";
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(app.Store.State.Items.Any(i => i.Title == "组会" && i.Date == "2026-10-11" && i.Time == "15:00" && i.Location == "B528" && i.Tags.Count == 2), "quick addition saves title date time location and tags");
+                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标题").Text = "错误时间"; Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办时间").Text = "25:00";
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!app.Store.State.Items.Any(i => i.Title == "错误时间"), "invalid quick time is refused without saving"); app.Main.Refresh(); app.Main.UpdateLayout();
                 foreach (string theme in new[] { "warm", "light", "dark" })
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout();
@@ -206,6 +215,9 @@ namespace DeskTodo
                     Check(days.All(b => b.BorderThickness.Right == 1 && b.BorderThickness.Bottom == 1), "right and bottom edges preserved " + theme);
                     Capture(app.Main, Path.Combine(root, "calendar-" + theme + ".png"));
                 }
+                var nextDay = new DateTime(2026, 10, 12); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "快速待办日期").SelectedDate == nextDay, "calendar selection synchronizes quick addition date");
+                app.Main.SelectDay(new DateTime(2026, 10, 11)); app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "calendar-small.png"));
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CALENDAR PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
