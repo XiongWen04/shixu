@@ -133,7 +133,7 @@ namespace DeskTodo
                 Check(app.Store.State.Items.First(i => i.Title == "组会").Done, "compact task completion persists through refresh");
                 search = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "事项搜索"); search.Text = "";
                 var nextDay = today.AddDays(1); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
-                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "快速待办日期").SelectedDate == nextDay, "clicking small calendar switches to selected monthly details");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == nextDay.ToString("M月d日  ddd")), "clicking small calendar switches to selected monthly details");
                 app.Main.SelectPage("今天"); app.Main.UpdateLayout(); Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "逾期 · 1 件"), "today retains overdue task access");
                 foreach (string skin in new[] { "light", "dark", "warm" }) { app.ChangeTheme(skin); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-today-" + skin + ".png")); }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "c-calendar-small.png"));
@@ -196,15 +196,34 @@ namespace DeskTodo
             try
             {
                 app.Main.SelectDay(new DateTime(2026, 10, 11)); app.Main.UpdateLayout();
-                var quickTitle = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标题"); quickTitle.Text = "组会";
-                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办时间").Text = "15:00";
-                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办地点").Text = "B528";
-                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标签").Text = "会议，科研";
-                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
-                Check(app.Store.State.Items.Any(i => i.Title == "组会" && i.Date == "2026-10-11" && i.Time == "15:00" && i.Location == "B528" && i.Tags.Count == 2), "quick addition saves title date time location and tags");
-                Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办标题").Text = "错误时间"; Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "快速待办时间").Text = "25:00";
-                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(!app.Store.State.Items.Any(i => i.Title == "错误时间"), "invalid quick time is refused without saving"); app.Main.Refresh(); app.Main.UpdateLayout();
+                Action<DateTime, bool> openEditor = (expected, save) =>
+                {
+                    Exception popupError = null;
+                    Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        EditWindow editor = null;
+                        try
+                        {
+                            editor = Application.Current.Windows.OfType<EditWindow>().Single(); editor.UpdateLayout();
+                            Check(editor.IsVisible && editor.Owner == app.Main, "calendar button opens owned editor dialog");
+                            Check(Controls<DatePicker>(editor).First(p => AutomationProperties.GetName(p) == "待办日期").SelectedDate == expected, "editor defaults to selected calendar day");
+                            if (save)
+                            {
+                                Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办标题").Text = "组会";
+                                Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办地点").Text = "B528";
+                                Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办标签").Text = "会议，科研";
+                                Controls<Button>(editor).First(b => (b.Content as string) == "保存待办").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                            }
+                        }
+                        catch (Exception ex) { popupError = ex; }
+                        finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                    }));
+                    Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加待办").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    if (popupError != null) throw popupError; app.Main.UpdateLayout();
+                };
+                openEditor(new DateTime(2026, 10, 11), true);
+                Check(app.Store.State.Items.Any(i => i.Title == "组会" && i.Date == "2026-10-11" && i.Location == "B528" && i.Tags.Count == 2), "dialog saves full task details and refreshes calendar");
+                Check(!Controls<TextBox>(app.Main).Any(t => AutomationProperties.GetName(t).StartsWith("快速待办")), "inline quick form is removed");
                 foreach (string theme in new[] { "warm", "light", "dark" })
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout();
@@ -216,7 +235,7 @@ namespace DeskTodo
                     Capture(app.Main, Path.Combine(root, "calendar-" + theme + ".png"));
                 }
                 var nextDay = new DateTime(2026, 10, 12); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
-                Check(Controls<DatePicker>(app.Main).First(p => AutomationProperties.GetName(p) == "快速待办日期").SelectedDate == nextDay, "calendar selection synchronizes quick addition date");
+                int beforeCancel = app.Store.State.Items.Count; openEditor(nextDay, false); Check(app.Store.State.Items.Count == beforeCancel, "cancelled dialog leaves tasks unchanged");
                 app.Main.SelectDay(new DateTime(2026, 10, 11)); app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "calendar-small.png"));
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CALENDAR PASS: " + passed); app.Exit();
             }
