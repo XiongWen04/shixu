@@ -1,12 +1,12 @@
 # 拾序 · Shixu
 
-<img src="src/AppLogo.png" alt="拾序的小猫头鹰图标" width="80">
+<img src="src/AppLogo.png" alt="拾序的绿色小鸟图标" width="80">
 
 用月历安排事情，用番茄钟记录学习，用桌面小组件随时查看待办。
 
 拾序是一款面向个人使用的 Windows 原生软件，数据保存在本机，无需登录。基于 C# / WPF / .NET Framework 4.8，便携运行，无第三方运行依赖。
 
-**当前版本：v2.2.2 · Windows x64**
+**当前版本：v2.2.3 · Windows x64**
 
 [下载便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
@@ -16,7 +16,7 @@
 
 推荐 Windows 11 64 位；Windows 10 64 位需已安装 .NET Framework 4.8。
 
-1. [下载 v2.2.2 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.2.2/Shixu-v2.2.2-win-x64-portable.zip)，解压到有写入权限的文件夹。
+1. [下载 v2.2.3 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.2.3/Shixu-v2.2.3-win-x64-portable.zip)，解压到有写入权限的文件夹。
 2. 运行 `拾序.exe`，保留旁边的 `拾序.exe.config`。
 3. 打开“月历”选择日期，点击右侧“添加待办”；也可以点击顶部“添加”或按 `Ctrl+N`。
 4. 需要学习时，打开“学习”，选择倒计时或正向计时，填写名称后开始。
@@ -189,7 +189,7 @@ Get-Content -LiteralPath (Join-Path $uiRoot 'ui-report.txt')
 
 `background` 和 `desktop` 为另外两个专项；省略第三个参数执行完整界面检查。GUI 命令返回不代表检查完成，需等待进程退出并读取报告。
 
-v2.2.2 发布前完成 19 项月历专项检查。最近一次完整核心检查为 v2.1.0 的 104 项；最近一次较完整界面检查为 v1.10.0 的 116 项，均不代表当前版本全套验证。自动检查不能替代不同 Windows 环境中的实际使用验证。
+v2.2.3 完成构建、十种尺寸图标解码、窗口 / 小组件 / 托盘图标加载检查及 19 项月历专项检查。此次仅更换图标，未重跑整套核心和界面检查。最近一次完整核心检查为 v2.1.0 的 104 项；最近一次较完整界面检查为 v1.10.0 的 116 项，均不代表当前版本全套验证。自动检查不能替代不同 Windows 环境中的实际使用验证。
 
 </details>
 
@@ -214,6 +214,7 @@ v2.2.2 发布前完成 19 项月历专项检查。最近一次完整核心检查
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v2.2.3](https://github.com/XiongWen04/shixu/releases/tag/v2.2.3) | 更换为米白底绿色小鸟图标，提供 Windows 多尺寸图标 |
 | [v2.2.2](https://github.com/XiongWen04/shixu/releases/tag/v2.2.2) | 月历通过“添加待办”按钮打开完整弹窗，默认日期跟随所选日 |
 | [v2.2.1](https://github.com/XiongWen04/shixu/releases/tag/v2.2.1) | 恢复左侧整月大网格与右侧任务列表 |
 | [v2.2.0](https://github.com/XiongWen04/shixu/releases/tag/v2.2.0) | 居中学习计时卡片、每日目标与底部学习记录抽屉 |
@@ -224,6 +225,6 @@ v2.2.2 发布前完成 19 项月历专项检查。最近一次完整核心检查
 
 ## 图标与许可
 
-小猫头鹰图标为本项目经 AI 辅助生成并选定的视觉资源，源图及多尺寸 ICO 位于 `src/`。
+绿色小鸟图标为本项目经 AI 辅助生成并选定的视觉资源，以纸页造型翅膀呼应记录与学习；米白底 PNG 及多尺寸 ICO 位于 `src/`。
 
 目前尚未指定开源许可证。公开代码不等于授予使用、修改或分发许可。
