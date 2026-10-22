@@ -191,6 +191,64 @@ namespace DeskTodo
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
         }
+        public static void RunCredits(AppController app, string root)
+        {
+            try
+            {
+                app.Main.SelectPage("综测"); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "还没有综测加分记录"), "credits empty state");
+                Action<bool, bool> edit = (existing, save) =>
+                {
+                    Exception failure = null;
+                    app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        var editor = Application.Current.Windows.OfType<CreditWindow>().FirstOrDefault();
+                        try
+                        {
+                            Check(editor != null && editor.Owner == app.Main, "credits owned dialog");
+                            var title = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "活动名称");
+                            var points = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t).StartsWith("加分分数"));
+                            var date = Controls<DatePicker>(editor).First();
+                            if (existing) Check(title.Text == "示例活动：志愿服务" && points.Text == "0.5", "credit edit prefills values");
+                            if (save)
+                            {
+                                title.Text = " "; points.Text = "0.5";
+                                Controls<Button>(editor).First(b => (b.Content as string) == "保存加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                Check(editor.IsVisible, "empty activity stays in dialog");
+                                title.Text = existing ? "示例活动：学术讲座" : "示例活动：志愿服务"; date.SelectedDate = new DateTime(2026, 10, 22);
+                                points.Text = "abc"; Controls<Button>(editor).First(b => (b.Content as string) == "保存加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "invalid decimal stays in dialog");
+                                points.Text = existing ? "1.25" : "0.5";
+                                Capture(editor, Path.Combine(root, "credit-editor.png"));
+                                Controls<Button>(editor).First(b => (b.Content as string) == "保存加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                            }
+                        }
+                        catch (Exception ex) { failure = ex; }
+                        finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                    }));
+                    if (existing) Controls<Button>(app.Main).First(b => (b.Content as string) == "修改").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    else Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    if (failure != null) throw failure;
+                    app.Main.UpdateLayout();
+                };
+                edit(false, false); Check(app.Store.State.Credits.Count == 0, "cancel preserves records");
+                edit(false, true); Check(app.Store.State.Credits.Single().Points == 0.5m && app.Store.State.Credits[0].Date == "2026-10-22", "dialog adds credit");
+                edit(true, true); Check(app.Store.State.Credits.Single().Points == 1.25m && app.Store.State.Credits[0].Title == "示例活动：学术讲座", "dialog edits without duplication");
+                app.SaveCredit(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "示例活动：志愿服务", Date = "2026-10-20", Points = 0.5m }, false);
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.UpdateLayout();
+                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "累计加分  1.75 分  ·  2 项活动"), "credits total " + theme);
+                    Capture(app.Main, Path.Combine(root, "credits-" + theme + ".png"));
+                }
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-small.png"));
+                Check(Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).All(b => b.ActualWidth > 0), "credit navigation available at minimum size");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Store.State.Credits.Single().Points == 0.5m, "delete removes selected record");
+                app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders after credits");
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CREDITS PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void RunCalendar(AppController app, string root)
         {
             try

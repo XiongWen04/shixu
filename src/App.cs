@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.2.3.0")]
+[assembly: AssemblyVersion("2.3.0.0")]
 
 namespace DeskTodo
 {
@@ -30,8 +30,9 @@ namespace DeskTodo
             if ((args.Length == 1 || args.Length == 2) && args[0] == "--exit") { NativeDesktop.RequestExit(args.Length == 2 ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory); return 0; }
             bool backgroundTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "background";
             bool desktopTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "desktop";
+            bool creditsTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "credits";
             bool calendarTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "calendar";
-            bool test = desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
+            bool test = creditsTest || desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
             string root = test ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             Directory.CreateDirectory(root);
             bool created;
@@ -47,7 +48,7 @@ namespace DeskTodo
                     application.DispatcherUnhandledException += (s, e) => { app.Error("操作未完成", e.Exception); e.Handled = true; };
                     application.SessionEnding += (s, e) => app.Exit();
                     app.Start();
-                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
+                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (creditsTest) UiSmoke.RunCredits(app, root); else if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
                     application.Run();
                     return Environment.ExitCode;
                 }
@@ -199,6 +200,30 @@ namespace DeskTodo
             catch (Exception ex) { if (TestMode) throw; Error("保存失败", ex); return false; }
         }
         public void ToggleImportant(string id) { Mutate(items => { var item = items.First(i => i.Id == id); item.Important = !item.Important; }); }
+        public void EditCredit(CreditRecord record)
+        {
+            var editor = new CreditWindow(this, record) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            editor.ShowDialog();
+        }
+        public bool SaveCredit(CreditRecord record, bool existing)
+        {
+            try
+            {
+                Store.ChangeState(state =>
+                {
+                    if (existing) { int index = state.Credits.FindIndex(c => c.Id == record.Id); if (index < 0) throw new InvalidOperationException("这条综测记录已不存在。"); state.Credits.RemoveAt(index); }
+                    state.Credits.Add(record.Copy());
+                });
+                Refresh(); return true;
+            }
+            catch (Exception ex) { if (TestMode) throw; Error("综测记录保存失败", ex); return false; }
+        }
+        public void DeleteCredit(CreditRecord record)
+        {
+            if (!TestMode && MessageBox.Show("删除综测记录“" + record.Title + "”？", "删除综测记录", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            try { Store.ChangeState(state => state.Credits.RemoveAll(c => c.Id == record.Id)); Refresh(); }
+            catch (Exception ex) { if (TestMode) throw; Error("综测记录删除失败", ex); }
+        }
         public bool SetDailyGoal(int minutes)
         {
             try { Store.ChangeState(state => state.DailyGoalMinutes = minutes); Main.RefreshFocus(); return true; }

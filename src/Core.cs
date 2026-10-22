@@ -50,17 +50,21 @@ namespace DeskTodo
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 6;
+        [DataMember(IsRequired = true)] public int Version = 7;
+        [DataMember] public List<CreditRecord> Credits = new List<CreditRecord>();
         [DataMember] public int DailyGoalMinutes;
         [DataMember(IsRequired = true)] public List<TodoItem> Items = new List<TodoItem>();
         [DataMember] public List<RepeatSeries> Series = new List<RepeatSeries>();
         [DataMember] public List<FocusSession> FocusHistory = new List<FocusSession>();
         [DataMember(EmitDefaultValue = false)] public FocusSession ActiveFocus;
-        [OnDeserializing] void Defaults(StreamingContext c) { Series = new List<RepeatSeries>(); FocusHistory = new List<FocusSession>(); }
-        public TodoState Copy() { return new TodoState { DailyGoalMinutes = DailyGoalMinutes, Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
+        [OnDeserializing] void Defaults(StreamingContext c) { Series = new List<RepeatSeries>(); FocusHistory = new List<FocusSession>(); Credits = new List<CreditRecord>(); }
+        public TodoState Copy() { return new TodoState { Credits = Credits.Select(c => c.Copy()).ToList(), DailyGoalMinutes = DailyGoalMinutes, Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
         public void Validate()
         {
-            if (Version < 1 || Version > 6) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version < 1 || Version > 7) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Credits == null || Credits.Count > 10000) throw new InvalidDataException("综测记录无效或超过 10000 条。");
+            var creditIds = new HashSet<string>();
+            foreach (var credit in Credits) { if (credit == null || !creditIds.Add(credit.Id)) throw new InvalidDataException("综测记录重复或无效。"); credit.Validate(); }
             if (DailyGoalMinutes < 0 || DailyGoalMinutes > 1440) throw new InvalidDataException("每日目标应为 0 至 1440 分钟，0 表示关闭目标。");
             if (FocusHistory == null || FocusHistory.Count > 10000) throw new InvalidDataException("学习记录无效或超过 10000 次，请先导出备份。");
             var focusIds = new HashSet<string>();
@@ -91,6 +95,24 @@ namespace DeskTodo
                 if (i.NotifiedFor != null && !DateTime.TryParseExact(i.NotifiedFor, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new InvalidDataException("提醒记录无效。");
                 if (i.SeriesId != null && !seriesIds.Contains(i.SeriesId)) throw new InvalidDataException("待办关联的重复规则不存在。");
             }
+        }
+    }
+
+    [DataContract]
+    public class CreditRecord
+    {
+        [DataMember(IsRequired = true)] public string Id;
+        [DataMember(IsRequired = true)] public string Title;
+        [DataMember(IsRequired = true)] public string Date;
+        [DataMember(IsRequired = true)] public decimal Points;
+        public CreditRecord Copy() { return (CreditRecord)MemberwiseClone(); }
+        public void Validate()
+        {
+            Guid id; DateTime date;
+            if (!Guid.TryParse(Id, out id)) throw new InvalidDataException("综测记录编号无效。");
+            if (String.IsNullOrWhiteSpace(Title) || Title.Length > 200) throw new InvalidDataException("活动名称不能为空，最多 200 字。");
+            if (!DateTime.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)) throw new InvalidDataException("请选择有效的活动日期。");
+            if (Points <= 0 || Points > 10000) throw new InvalidDataException("加分分数应大于 0，且不超过 10000。");
         }
     }
 
@@ -390,7 +412,7 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 6; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 7; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
         public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }

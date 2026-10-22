@@ -16,6 +16,31 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            var credits = new TodoState();
+            credits.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "志愿服务", Date = "2026-10-22", Points = 0.1m });
+            credits.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "学术讲座", Date = "2026-10-21", Points = 0.2m });
+            credits.Validate(); Check(credits.Credits.Sum(c => c.Points) == 0.3m, "credit decimal total is exact");
+            var creditsCopy = credits.Copy(); creditsCopy.Credits[0].Title = "副本";
+            Check(credits.Credits[0].Title == "志愿服务", "credit snapshots are deep copied");
+            creditsCopy.Credits[0].Points = -1; Throws(() => creditsCopy.Validate(), "negative credits rejected");
+            creditsCopy.Credits[0].Points = 0; Throws(() => creditsCopy.Validate(), "zero credits rejected");
+            creditsCopy.Credits[0].Points = 1; creditsCopy.Credits[0].Title = " "; Throws(() => creditsCopy.Validate(), "empty credit activity rejected");
+            creditsCopy.Credits[0].Title = "测试"; creditsCopy.Credits[0].Date = "2026-02-30"; Throws(() => creditsCopy.Validate(), "invalid credit date rejected");
+            creditsCopy = credits.Copy(); creditsCopy.Credits.Add(creditsCopy.Credits[0].Copy()); Throws(() => creditsCopy.Validate(), "duplicate credit IDs rejected");
+            using (var creditStore = DataStore.Open(Path.Combine(root, "credits")))
+            {
+                creditStore.ChangeState(state => state.Credits = credits.Credits.Select(c => c.Copy()).ToList());
+                creditStore.Change(items => items.Add(Item("普通待办", null)));
+                string creditExport = Path.Combine(root, "credits-export.json"); creditStore.Export(creditExport);
+                var creditRestored = DataStore.ReadState(creditExport);
+                Check(creditRestored.Version == 7 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
+                creditStore.ChangeState(state => state.Credits.Clear()); creditStore.Import(creditExport);
+                Check(creditStore.State.Credits.Count == 2, "import replaces and restores credits");
+                Throws(() => creditStore.ChangeState(state => state.Credits[0].Points = -1), "invalid credit save fails atomically");
+                Check(DataStore.ReadState(Path.Combine(creditStore.DirectoryPath, "tasks.json")).Credits[0].Points == 0.1m, "failed credit save leaves disk unchanged");
+            }
+            string legacyCredits = Path.Combine(root, "credits-v6.json"); File.WriteAllText(legacyCredits, "{\"Version\":6,\"Items\":[]}");
+            Check(DataStore.ReadState(legacyCredits).Credits.Count == 0, "v6 data defaults to empty credit list");
             var backgroundSettings = new AppSettings(); Check(backgroundSettings.BackgroundFile == "" && backgroundSettings.BackgroundShade == 0.65, "default background remains disabled with readable shade");
             backgroundSettings.BackgroundFile = "../private.png"; Throws(() => backgroundSettings.Validate(), "background settings reject paths outside managed image directory");
             backgroundSettings.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png"; backgroundSettings.Validate();
@@ -171,10 +196,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 6 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 7 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 6, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 7, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");

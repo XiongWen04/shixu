@@ -89,6 +89,34 @@ namespace DeskTodo
         }
     }
 
+    public class CreditWindow : Window
+    {
+        public CreditWindow(AppController app, CreditRecord existing)
+        {
+            Title = existing == null ? "添加综测加分" : "修改综测加分"; Width = 460; Height = 480; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Ui.Icon(this);
+            SourceInitialized += (s, e) => NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark");
+            var root = new DockPanel { Margin = new Thickness(26) }; Content = root;
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons);
+            var cancel = Ui.Button("取消", () => Close()); cancel.IsCancel = true; cancel.Margin = new Thickness(0, 0, 10, 0); buttons.Children.Add(cancel);
+            var fields = new StackPanel(); root.Children.Add(Ui.Scroll(fields)); fields.Children.Add(Ui.Text(Title, 24, "Text", true));
+            var title = new TextBox { Text = existing == null ? "" : existing.Title, MaxLength = 200 };
+            var date = new DatePicker { SelectedDate = existing == null ? DateTime.Today : DateTime.ParseExact(existing.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture), FirstDayOfWeek = DayOfWeek.Monday };
+            var points = new TextBox { Text = existing == null ? "" : existing.Points.ToString(CultureInfo.CurrentCulture), MaxLength = 32 };
+            string[] labels = { "活动名称", "活动日期", "加分分数（支持小数）" }; Control[] inputs = { title, date, points };
+            for (int i = 0; i < labels.Length; i++) { var label = Ui.Text(labels[i], 12, "Muted"); label.Margin = new Thickness(0, 16, 0, 6); fields.Children.Add(label); AutomationProperties.SetName(inputs[i], labels[i]); fields.Children.Add(inputs[i]); }
+            var error = Ui.Text("", 12, "Danger"); error.Margin = new Thickness(0, 12, 0, 0); fields.Children.Add(error);
+            title.TextChanged += (o, e) => error.Text = ""; points.TextChanged += (o, e) => error.Text = ""; date.SelectedDateChanged += (o, e) => error.Text = "";
+            var save = Ui.Button("保存加分", () =>
+            {
+                decimal value;
+                if (!decimal.TryParse(points.Text.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.CurrentCulture, out value)) { error.Text = "请输入有效的加分分数，例如 0.5。"; points.Focus(); return; }
+                var record = new CreditRecord { Id = existing == null ? Guid.NewGuid().ToString("N") : existing.Id, Title = title.Text.Trim(), Date = date.SelectedDate.HasValue ? Dates.Key(date.SelectedDate.Value) : null, Points = value };
+                try { record.Validate(); } catch (Exception ex) { error.Text = ex.Message; return; }
+                if (app.SaveCredit(record, existing != null)) Close();
+            }, "Primary"); save.IsDefault = true; buttons.Children.Add(save); Loaded += (o, e) => title.Focus();
+        }
+    }
+
     public class EditWindow : Window
     {
         public EditWindow(AppController app, TodoItem existing, DateTime? initialDate)
