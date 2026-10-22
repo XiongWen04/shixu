@@ -1,10 +1,14 @@
-﻿# 拾序 · Shixu
+﻿# 拾序 Shixu · Windows 待办清单、番茄钟与学习计时
 
 <img src="src/AppLogo.png" alt="拾序的绿色小鸟图标" width="80">
 
-用月历安排事情，用番茄钟记录学习，用桌面小组件随时查看待办。
+**面向大学生、研究生的 Windows 桌面日程与学习工具。** 用月历安排课程、组会和截止日期，用番茄钟或正向计时记录学习，再把参加过的活动与综测加分整理到同一个地方。
 
-拾序是一款面向个人使用的 Windows 原生软件，数据保存在本机，无需登录。基于 C# / WPF / .NET Framework 4.8，便携运行，无第三方运行依赖。
+支持 **待办清单、日历计划、番茄钟、学习时长统计、桌面小组件和综测加分记录**。数据保存在本机，无需登录，解压即可使用；提供风景皮肤和自定义背景。
+
+**Shixu is a portable Windows to-do list and study timer** with calendar planning, Pomodoro, study statistics, desktop widgets and student activity score tracking. Local data storage; no sign-in required.
+
+基于 C# / WPF / .NET Framework 4.8，Windows x64 原生运行，无第三方运行依赖。
 
 **当前版本：v2.5.0 · Windows x64**
 
