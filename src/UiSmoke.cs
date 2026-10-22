@@ -97,6 +97,76 @@ namespace DeskTodo
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(path)) encoder.Save(file);
         }
+        public static void RunLayout(AppController app, string root)
+        {
+            try
+            {
+                var day = new DateTime(2026, 10, 22);
+                app.Store.ChangeState(state =>
+                {
+                    string[] names = { "组会 · 论文进展讨论", "整理对话推荐文献", "提交课程作业", "实验方案梳理", "志愿服务", "阅读论文", "整理实验结果", "文献汇报" };
+                    int[] dates = { 22, 22, 22, 12, 16, 19, 26, 28 };
+                    string[] times = { "14:00", "19:30", "21:00", "10:00", null, "09:30", "15:00", "14:00" };
+                    for (int n = 0; n < names.Length; n++) state.Items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = names[n], Date = "2026-10-" + dates[n].ToString("D2"), Time = times[n], CreatedUtc = DateTime.UtcNow.ToString("o"), Location = n == 0 ? "实验室 B528" : null, Tags = new List<string> { n == 2 ? "课程" : n == 4 ? "生活" : "科研" }, Important = n == 0, Done = n == 2 });
+                    state.DailyGoalMinutes = 120;
+                    var began = new DateTimeOffset(day.AddHours(9), TimeSpan.FromHours(8));
+                    state.FocusHistory.Add(new FocusSession { Id = Guid.NewGuid().ToString("N"), Title = "论文阅读", StartedAt = began.ToString("o"), EndedAt = began.AddMinutes(45).ToString("o"), TargetSeconds = 2700, Completed = true, Slices = new List<FocusSlice> { new FocusSlice { StartedAt = began.ToString("o"), Seconds = 2700 } } });
+                    string[] activities = { "校级志愿服务", "研究生学术论坛", "学院实践活动" };
+                    for (int n = 0; n < activities.Length; n++) state.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = activities[n], Date = "2026-10-" + (20 - n * 3).ToString(), Points = new[] { 0.5m, 1.25m, 0.75m }[n] });
+                });
+                var settings = app.Settings.Copy(); settings.WidgetVisible = false; app.SaveSettings(settings); app.Widget.Hide();
+                app.SelectBuiltInSkin("sunlit"); app.Main.SelectPage("月历"); app.Main.SelectDay(day); Pump();
+                Check(Controls<Button>(app.Main).Count(b => AutomationProperties.GetName(b).StartsWith("导航 ")) == 5, "new sidebar includes all five pages");
+                Check(app.Main.CalendarCellCount == 35, "redesigned calendar preserves full month");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "2026 / 日程") && Controls<TextBlock>(app.Main).Any(t => t.Text == "2 项待完成  /  1 项已完成"), "new month and selected-day hierarchy");
+                string unchanged = File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json"));
+                var more = Controls<Button>(app.Main).First(b => (b.Content as string) == "···"); more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                Check(File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json")) == unchanged, "opening task menu does not mutate importance");
+                foreach (var cm in Controls<Border>(app.Main).Where(b => b.ContextMenu != null)) cm.ContextMenu.IsOpen = false;
+                var importantId = app.Store.State.Items.First(i => i.Important).Id;
+                var taskMenu = Controls<Border>(app.Main).Select(b => b.ContextMenu).First(m => m != null && m.Items.OfType<MenuItem>().Any(i => (i.Header as string) == "取消重要"));
+                taskMenu.Items.OfType<MenuItem>().First(i => (i.Header as string) == "取消重要").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Pump();
+                Check(!app.Store.State.Items.First(i => i.Id == importantId).Important, "task menu removes important flag");
+                var restoreMenu = Controls<Border>(app.Main).First(b => b.ContextMenu != null && (b.ToolTip as string) == "组会 · 论文进展讨论\n").ContextMenu;
+                restoreMenu.Items.OfType<MenuItem>().First(i => (i.Header as string) == "标为重要").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Pump();
+                Check(app.Store.State.Items.First(i => i.Id == importantId).Important, "task menu restores important flag");
+                var check = Controls<CheckBox>(app.Main).First(c => AutomationProperties.GetName(c) == "完成 组会 · 论文进展讨论"); check.IsChecked = true; check.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Pump();
+                Check(app.Store.State.Items.First(i => i.Id == importantId).Done, "new task card completion saves");
+                check = Controls<CheckBox>(app.Main).First(c => AutomationProperties.GetName(c) == "完成 组会 · 论文进展讨论"); check.IsChecked = false; check.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Pump();
+                var deleteMenu = Controls<Border>(app.Main).First(b => b.ContextMenu != null && (b.ToolTip as string) == "组会 · 论文进展讨论\n").ContextMenu;
+                deleteMenu.Items.OfType<MenuItem>().First(i => (i.Header as string) == "删除（可撤销）").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Pump();
+                Check(!app.Store.State.Items.Any(i => i.Id == importantId), "task menu deletes selected task"); app.UndoDelete();
+                Check(app.Store.State.Items.Any(i => i.Id == importantId && i.Important && !i.Done), "undo preserves card task details");
+                unchanged = File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json")); Pump();
+
+                Capture(app.Main, Path.Combine(root, "calendar-sunlit.png"));
+                app.SelectBuiltInSkin("mountain"); Pump(); Capture(app.Main, Path.Combine(root, "calendar-mountain.png"));
+                app.Main.Width = 960; app.Main.Height = 650; Pump(); Capture(app.Main, Path.Combine(root, "calendar-small.png"));
+                var selectedCell = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("2026年10月22日，"));
+                Check(Controls<Border>(selectedCell).Count(b => AutomationProperties.GetName(b).StartsWith("日期任务 ")) == 1 && Controls<TextBlock>(selectedCell).Any(t => t.Text == "+2"), "small calendar shows one task and remaining count");
+                app.Main.SelectDay(new DateTime(2026, 3, 22)); Pump(); Check(app.Main.CalendarCellCount == 42, "six-week month retains all dates in compact layout"); app.Main.SelectDay(day); Pump();
+                var add = Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加待办"); var position = add.TransformToAncestor((Visual)app.Main.Content).Transform(new Point(0, 0));
+                Check(add.ActualWidth > 150 && position.X + add.ActualWidth <= ((FrameworkElement)app.Main.Content).ActualWidth + 1, "add button fits minimum window");
+                Exception failure = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<EditWindow>().FirstOrDefault();
+                    try { Check(editor != null && editor.Owner == app.Main, "new calendar uses existing owned editor"); Check(Controls<DatePicker>(editor).First().SelectedDate == day, "calendar editor retains selected date"); }
+                    catch (Exception ex) { failure = ex; }
+                    finally { if (editor != null) editor.Close(); }
+                }));
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if (failure != null) throw failure;
+                app.Main.Width = 1280; app.Main.Height = 820; app.SelectBuiltInSkin("sunlit");
+                foreach (string page in new[] { "今天", "全部", "番茄钟", "学习统计", "学习报告", "综测" })
+                {
+                    app.Main.SelectPage(page); Pump(); Check(Controls<Button>(app.Main).Any(b => AutomationProperties.GetName(b) == "导航 综测"), "sidebar stays available on " + page); Capture(app.Main, Path.Combine(root, page + ".png"));
+                }
+                Check(File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json")) == unchanged, "navigation and skin switching leave example data unchanged");
+                app.Main.SelectPage("月历"); app.Main.SelectDay(day);
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "LAYOUT PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void RunDesktop(AppController app, string root)
         {
             try
@@ -190,12 +260,12 @@ namespace DeskTodo
                     Check(app.Settings.BackgroundFile == imported && File.Exists(Path.Combine(root, "Backgrounds", imported)), "built-in selection preserves custom image " + key);
                     Check(SettingsFile.Load(app.SettingsPath).BuiltInSkin == key, "built-in choice persists " + key);
                     var oldImage = app.BackgroundImage; app.LoadBackground(); Check(app.BackgroundImage != null && app.BackgroundImage != oldImage, "built-in reload decodes embedded resource " + key);
-                    Check(((SolidColorBrush)Application.Current.Resources["Panel"]).Opacity < 0.7, "built-in panels reveal scenery " + key);
+                    Check(((SolidColorBrush)Application.Current.Resources["Panel"]).Opacity >= 0.7 && ((SolidColorBrush)Application.Current.Resources["Panel"]).Opacity < 0.85, "built-in panels reveal scenery " + key);
                     app.ThemeMenu(skinButton); Pump(); Check(skinButton.ContextMenu.Items.OfType<MenuItem>().Single(i => i.IsChecked).Header.ToString() == skinNames[n], "built-in menu has one active selection " + key); skinButton.ContextMenu.IsOpen = false;
                     foreach (string page in new[] { "月历", "今天", "全部", "番茄钟", "学习统计", "学习报告", "综测" })
                     {
                         app.Main.SelectPage(page); if (page == "月历") app.Main.SelectDay(sampleDate); app.Main.UpdateLayout();
-                        Check(Controls<Image>(app.Main).Any(i => i.Visibility == Visibility.Visible && i.Source != null), "built-in backdrop visible on " + page + " " + key);
+                        Check(Controls<Image>(app.Main).Any(i => !i.IsHitTestVisible && i.Visibility == Visibility.Visible && i.Source != null), "built-in backdrop visible on " + page + " " + key);
                         Capture(app.Main, Path.Combine(root, "skin-" + key + "-" + page + ".png"));
                     }
                     app.Main.Width = 960; app.Main.Height = 650; app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "skin-" + key + "-small.png")); app.Main.Width = 1160; app.Main.Height = 790;
@@ -215,7 +285,7 @@ namespace DeskTodo
                 string invalid = Path.Combine(root, "invalid.png"); File.WriteAllText(invalid, "not an image"); bool rejected = false; try { app.ImportBackground(invalid); } catch { rejected = true; }
                 Check(rejected && app.Settings.BackgroundFile == imported && app.BackgroundImage != null, "invalid image preserves existing background");
                 Check(app.ResetBackground() && app.BackgroundImage == null && app.Settings.BackgroundFile == "", "reset restores theme and saves default");
-                Check(!Controls<Image>(app.Main).Any(i => i.Visibility == Visibility.Visible), "default background hides image layer");
+                Check(!Controls<Image>(app.Main).Any(i => !i.IsHitTestVisible && i.Visibility == Visibility.Visible), "default background hides image layer");
                 var missing = app.Settings.Copy(); missing.BackgroundFile = imported; Check(app.SaveSettings(missing), "saved background selection accepted"); File.Move(Path.Combine(root, "Backgrounds", imported), Path.Combine(root, "Backgrounds", imported + ".moved")); app.LoadBackground(); Check(app.BackgroundImage == null, "missing optional image falls back safely"); app.ResetBackground();
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "BACKGROUND PASS: " + passed); app.Exit();
             }
@@ -267,7 +337,7 @@ namespace DeskTodo
                 foreach (string theme in new[] { "warm", "light", "dark" })
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout();
-                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "累计加分  1.75 分  ·  2 项活动"), "credits total " + theme);
+                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1.75 分") && Controls<TextBlock>(app.Main).Any(t => t.Text == "2 项活动"), "credits total " + theme);
                     Capture(app.Main, Path.Combine(root, "credits-" + theme + ".png"));
                 }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-small.png"));
@@ -317,9 +387,9 @@ namespace DeskTodo
                     app.ChangeTheme(theme); app.Main.UpdateLayout();
                     var days = Controls<Button>(app.Main).Where(b => b.Style == Application.Current.Resources["CalendarDay"]).ToList();
                     Check(days.Count == 35, "calendar full weeks " + theme);
-                    Check(days.Take(7).All(b => ((Border)b.Template.FindName("Frame", b)).BorderThickness.Top == 1), "top outside edge is continuous " + theme);
-                    Check(days.Where((b, index) => index % 7 == 0).All(b => ((Border)b.Template.FindName("Frame", b)).BorderThickness.Left == 1), "left outside edge is continuous " + theme);
-                    Check(days.All(b => b.BorderThickness.Right == 1 && b.BorderThickness.Bottom == 1), "right and bottom edges preserved " + theme);
+                    Check(days.All(b => ((Border)b.Template.FindName("Frame", b)).CornerRadius.TopLeft == 10), "calendar cells use rounded frames " + theme);
+                    Check(days.All(b => b.Margin.Left == 2 && b.Margin.Right == 2), "calendar cells retain breathing room " + theme);
+                    Check(days.Count(b => b.BorderThickness.Left == 1) == 1, "only selected date has full outline " + theme);
                     Capture(app.Main, Path.Combine(root, "calendar-" + theme + ".png"));
                 }
                 var nextDay = new DateTime(2026, 10, 12); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();

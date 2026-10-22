@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.4.0.0")]
+[assembly: AssemblyVersion("2.5.0.0")]
 
 namespace DeskTodo
 {
@@ -30,9 +30,10 @@ namespace DeskTodo
             if ((args.Length == 1 || args.Length == 2) && args[0] == "--exit") { NativeDesktop.RequestExit(args.Length == 2 ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory); return 0; }
             bool backgroundTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "background";
             bool desktopTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "desktop";
+            bool layoutTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "layout";
             bool creditsTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "credits";
             bool calendarTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "calendar";
-            bool test = creditsTest || desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
+            bool test = layoutTest || creditsTest || desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
             string root = test ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             Directory.CreateDirectory(root);
             bool created;
@@ -48,7 +49,7 @@ namespace DeskTodo
                     application.DispatcherUnhandledException += (s, e) => { app.Error("操作未完成", e.Exception); e.Handled = true; };
                     application.SessionEnding += (s, e) => app.Exit();
                     app.Start();
-                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (creditsTest) UiSmoke.RunCredits(app, root); else if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
+                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (layoutTest) UiSmoke.RunLayout(app, root); else if (creditsTest) UiSmoke.RunCredits(app, root); else if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
                     application.Run();
                     return Environment.ExitCode;
                 }
@@ -362,13 +363,14 @@ namespace DeskTodo
         void ApplyBackgroundPalette()
         {
             Application.Current.Resources["MainCanvas"] = BackgroundImage == null ? Application.Current.Resources["Surface"] : Brushes.Transparent;
-            if (BackgroundImage != null) { var panel = ((SolidColorBrush)Application.Current.Resources["Panel"]).Clone(); panel.Opacity = Settings.BuiltInSkin == "" ? 0.9 : 0.58; Application.Current.Resources["Panel"] = panel; }
+            if (BackgroundImage != null) { var panel = ((SolidColorBrush)Application.Current.Resources["Panel"]).Clone(); panel.Opacity = Settings.BuiltInSkin == "" ? 0.9 : 0.79; Application.Current.Resources["Panel"] = panel; }
+            Application.Current.Resources["SelectedDay"] = new SolidColorBrush(Settings.Theme == "dark" ? Color.FromArgb(230, 48, 57, 76) : Color.FromArgb(100, 255, 255, 255));
             Application.Current.Resources["StatusSurface"] = Settings.BuiltInSkin == "" ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(210, 255, 255, 255));
             if (Settings.BuiltInSkin != "")
             {
                 Application.Current.Resources["Accent"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(Settings.BuiltInSkin == "mountain" ? "#286D9B" : "#B45D25"));
                 Application.Current.Resources["Muted"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#46545D"));
-                Application.Current.Resources["Line"] = new SolidColorBrush(Color.FromArgb(105, 255, 255, 255));
+                Application.Current.Resources["Line"] = new SolidColorBrush(Color.FromArgb(40, 62, 83, 86));
             }
             if (Main != null) Main.UpdateBackground(BackgroundImage, Settings.BackgroundShade);
         }
