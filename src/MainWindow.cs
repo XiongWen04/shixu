@@ -45,15 +45,17 @@ namespace DeskTodo
             var nav = new StackPanel { Orientation = Orientation.Horizontal }; var navCard = Ui.Card(nav, new Thickness(4)); navCard.CornerRadius = new CornerRadius(20); Grid.SetColumn(navCard, 1); navigationBar.Children.Add(navCard);
             string[] keys = { "今天", "全部", "月历", "番茄钟", "综测" };
             for (int n = 0; n < keys.Length; n++) { string key = keys[n]; var b = Ui.Button(n == 3 ? "学习" : key, () => SelectPage(key), "Quiet"); System.Windows.Automation.AutomationProperties.SetName(b, "导航 " + key); b.Padding = new Thickness(12, 6, 12, 6); navigation[key] = b; nav.Children.Add(b); }
-            var utilities = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(utilities, 2); navigationBar.Children.Add(utilities);
+            var utilities = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right }; utilities.SetResourceReference(StackPanel.BackgroundProperty, "StatusSurface"); Grid.SetColumn(utilities, 2); navigationBar.Children.Add(utilities);
             widgetToggle = Ui.Button("▣  桌面小组件", () => app.ToggleWidget(), "Quiet"); widgetToggle.FontSize = 11; widgetToggle.Padding = new Thickness(10, 8, 10, 8); utilities.Children.Add(widgetToggle);
             Button theme = null; theme = Ui.Button("换肤", () => app.ThemeMenu(theme), "Quiet"); utilities.Children.Add(theme);
             utilities.Children.Add(Ui.Button("⚙  设置", () => { var window = new SettingsWindow(app) { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner }; window.ShowDialog(); }, "Quiet"));
             var main = new Grid { Margin = new Thickness(24, 12, 24, 14) }; main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); layout.Children.Add(main);
+            header.SetResourceReference(Grid.BackgroundProperty, "StatusSurface");
             header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); main.Children.Add(header);
             var titles = new StackPanel(); titles.Children.Add(heading); subtitle.Margin = new Thickness(0, 8, 0, 0); titles.Children.Add(subtitle); header.Children.Add(titles);
             Grid.SetColumn(tools, 1); tools.VerticalAlignment = VerticalAlignment.Center; header.Children.Add(tools);
             Grid.SetRow(body, 1); main.Children.Add(body);
+            status.SetResourceReference(TextBlock.BackgroundProperty, "StatusSurface"); status.Padding = new Thickness(6, 3, 6, 3); status.HorizontalAlignment = HorizontalAlignment.Left;
             status.Margin = new Thickness(0, 15, 0, 0); Grid.SetRow(status, 2); main.Children.Add(status);
         }
         public void SelectPage(string name) { page = name; if (name == "今天") { selected = DateTime.Today; Month = new DateTime(selected.Year, selected.Month, 1); } Refresh(); }

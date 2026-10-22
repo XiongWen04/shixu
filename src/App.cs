@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.3.0.0")]
+[assembly: AssemblyVersion("2.4.0.0")]
 
 namespace DeskTodo
 {
@@ -278,9 +278,9 @@ namespace DeskTodo
         }
         public bool ChangeTheme(string name)
         {
-            var next = Settings.Copy(); next.Theme = name;
+            var next = Settings.Copy(); next.Theme = name; next.BuiltInSkin = "";
             if (!SaveSettings(next)) return false;
-            SetPalette(name); ApplyBackgroundPalette(); Refresh();
+            LoadBackground(); SetPalette(name); ApplyBackgroundPalette(); Refresh();
             foreach (Window window in Application.Current.Windows) NativeDesktop.DarkTitle(window, name == "dark");
             return true;
         }
@@ -303,31 +303,58 @@ namespace DeskTodo
             string[] keys = { "light", "warm", "dark" }, names = { "蓝白", "暖色", "深色" };
             for (int n = 0; n < keys.Length; n++)
             {
-                string key = keys[n]; var item = new System.Windows.Controls.MenuItem { Header = names[n], IsCheckable = true, IsChecked = Settings.Theme == key };
+                string key = keys[n]; var item = new System.Windows.Controls.MenuItem { Header = names[n], IsCheckable = true, IsChecked = Settings.BuiltInSkin == "" && Settings.Theme == key };
                 item.Click += (s, e) => ChangeTheme(key); menu.Items.Add(item);
+            }
+            menu.Items.Add(new System.Windows.Controls.Separator());
+            string[] skinKeys = { "mountain", "sunlit" }, skinNames = { "山湖晨光", "晴日拾光" };
+            for (int n = 0; n < skinKeys.Length; n++)
+            {
+                string key = skinKeys[n]; var item = new System.Windows.Controls.MenuItem { Header = skinNames[n], IsCheckable = true, IsChecked = Settings.BuiltInSkin == key };
+                item.Click += (s, e) => SelectBuiltInSkin(key); menu.Items.Add(item);
             }
             menu.Items.Add(new System.Windows.Controls.Separator());
             var select = new System.Windows.Controls.MenuItem { Header = "选择背景图片…" }; select.Click += (s, e) => { var picker = new Microsoft.Win32.OpenFileDialog { Title = "选择拾序背景", Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*" }; if (picker.ShowDialog(Main) == true) ImportBackground(picker.FileName); }; menu.Items.Add(select);
             var shade = new System.Windows.Controls.MenuItem { Header = "背景遮罩" , IsEnabled = BackgroundImage != null };
             foreach (double value in new[] { 0.2, 0.4, 0.65, 0.8, 0.9 }) { double opacity = value; var choice = new System.Windows.Controls.MenuItem { Header = (value * 100).ToString("0") + "%", IsCheckable = true, IsChecked = Math.Abs(Settings.BackgroundShade - value) < 0.001 }; choice.Click += (s, e) => SetBackgroundShade(opacity); shade.Items.Add(choice); } menu.Items.Add(shade);
-            var reset = new System.Windows.Controls.MenuItem { Header = "恢复默认背景", IsEnabled = Settings.BackgroundFile != "" }; reset.Click += (s, e) => ResetBackground(); menu.Items.Add(reset);
+            var reset = new System.Windows.Controls.MenuItem { Header = "恢复默认背景", IsEnabled = Settings.BackgroundFile != "" || Settings.BuiltInSkin != "" }; reset.Click += (s, e) => ResetBackground(); menu.Items.Add(reset);
             owner.ContextMenu = menu; menu.PlacementTarget = owner; menu.IsOpen = true;
         }
         public BitmapSource BackgroundImage { get; private set; }
         static BitmapSource ReadBackground(string path)
         {
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)) return ReadBackground(stream);
+        }
+        static BitmapSource ReadBackground(Stream stream)
+        {
+            if (stream == null) throw new InvalidDataException("内置背景资源缺失。");
+            if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("请选择小于 32 MB 的图片。");
+            var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0]; int width = frame.PixelWidth, height = frame.PixelHeight; stream.Position = 0;
+            var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
+            if ((double)width / height >= 1920.0 / 1080) image.DecodePixelWidth = Math.Min(width, 1920); else image.DecodePixelHeight = Math.Min(height, 1080);
+            image.StreamSource = stream; image.EndInit(); image.Freeze(); return image;
+        }
+        static BitmapSource ReadBuiltInSkin(string name)
+        {
+            if (name != "mountain" && name != "sunlit") throw new InvalidDataException("内置皮肤设置无效。");
+            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Skins." + name + ".png")) return ReadBackground(stream);
+        }
+        public bool SelectBuiltInSkin(string name)
+        {
+            try
             {
-                if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("请选择小于 32 MB 的图片。");
-                var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0]; int width = frame.PixelWidth, height = frame.PixelHeight; stream.Position = 0;
-                var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
-                if ((double)width / height >= 1920.0 / 1080) image.DecodePixelWidth = Math.Min(width, 1920); else image.DecodePixelHeight = Math.Min(height, 1080);
-                image.StreamSource = stream; image.EndInit(); image.Freeze(); return image;
+                var image = ReadBuiltInSkin(name); var next = Settings.Copy(); next.BuiltInSkin = name; next.Theme = name == "mountain" ? "light" : "warm"; next.BackgroundShade = 0.2;
+                if (!SaveSettings(next)) return false;
+                BackgroundImage = image; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh();
+                foreach (Window window in Application.Current.Windows) NativeDesktop.DarkTitle(window, false);
+                return true;
             }
+            catch (Exception ex) { if (TestMode) throw; Error("内置皮肤未更换", ex); return false; }
         }
         public void LoadBackground()
         {
             BackgroundImage = null;
+            if (Settings.BuiltInSkin != "") { BackgroundImage = ReadBuiltInSkin(Settings.BuiltInSkin); return; }
             if (Settings.BackgroundFile == "") return;
             try { BackgroundImage = ReadBackground(Path.Combine(Path.GetDirectoryName(SettingsPath), "Backgrounds", Settings.BackgroundFile)); }
             catch { /* shortcut: missing or damaged optional background falls back to the theme; select another image to restore it. */ }
@@ -335,14 +362,21 @@ namespace DeskTodo
         void ApplyBackgroundPalette()
         {
             Application.Current.Resources["MainCanvas"] = BackgroundImage == null ? Application.Current.Resources["Surface"] : Brushes.Transparent;
-            if (BackgroundImage != null) { var panel = ((SolidColorBrush)Application.Current.Resources["Panel"]).Clone(); panel.Opacity = 0.9; Application.Current.Resources["Panel"] = panel; }
+            if (BackgroundImage != null) { var panel = ((SolidColorBrush)Application.Current.Resources["Panel"]).Clone(); panel.Opacity = Settings.BuiltInSkin == "" ? 0.9 : 0.58; Application.Current.Resources["Panel"] = panel; }
+            Application.Current.Resources["StatusSurface"] = Settings.BuiltInSkin == "" ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(210, 255, 255, 255));
+            if (Settings.BuiltInSkin != "")
+            {
+                Application.Current.Resources["Accent"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(Settings.BuiltInSkin == "mountain" ? "#286D9B" : "#B45D25"));
+                Application.Current.Resources["Muted"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#46545D"));
+                Application.Current.Resources["Line"] = new SolidColorBrush(Color.FromArgb(105, 255, 255, 255));
+            }
             if (Main != null) Main.UpdateBackground(BackgroundImage, Settings.BackgroundShade);
         }
         public bool ImportBackground(string path)
         {
             try
             {
-                var image = ReadBackground(path); var next = Settings.Copy(); next.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png";
+                var image = ReadBackground(path); var next = Settings.Copy(); next.BuiltInSkin = ""; next.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png";
                 string directory = Path.Combine(Path.GetDirectoryName(SettingsPath), "Backgrounds"); Directory.CreateDirectory(directory);
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var file = new FileStream(Path.Combine(directory, next.BackgroundFile), FileMode.CreateNew)) encoder.Save(file);
                 if (!SaveSettings(next)) return false; BackgroundImage = image; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh(); return true;
@@ -350,7 +384,7 @@ namespace DeskTodo
             catch (Exception ex) { if (TestMode) throw; Error("背景图片未更换", ex); return false; }
         }
         public bool SetBackgroundShade(double opacity) { var next = Settings.Copy(); next.BackgroundShade = opacity; if (!SaveSettings(next)) return false; if (Main != null) Main.UpdateBackground(BackgroundImage, opacity); return true; }
-        public bool ResetBackground() { var next = Settings.Copy(); next.BackgroundFile = ""; if (!SaveSettings(next)) return false; BackgroundImage = null; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh(); return true; }
+        public bool ResetBackground() { var next = Settings.Copy(); next.BackgroundFile = ""; next.BuiltInSkin = ""; if (!SaveSettings(next)) return false; BackgroundImage = null; SetPalette(Settings.Theme); ApplyBackgroundPalette(); Refresh(); return true; }
         public void ToggleWidget()
         {
             var next = Settings.Copy(); next.WidgetVisible = !next.WidgetVisible;

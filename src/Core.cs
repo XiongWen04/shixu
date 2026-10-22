@@ -288,6 +288,7 @@ namespace DeskTodo
         [DataMember] public string Theme = "warm";
         [DataMember] public string DataPath = "";
         [DataMember] public string BackgroundFile = "";
+        [DataMember] public string BuiltInSkin = "";
         [DataMember] public double BackgroundShade = 0.65;
         [DataMember] public double WidgetX = -100000;
         [DataMember] public double WidgetY = -100000;
@@ -298,12 +299,13 @@ namespace DeskTodo
         {
             Theme = "warm"; DataPath = ""; WidgetX = WidgetY = -100000;
             WidgetWidth = 320; WidgetHeight = 460; WidgetVisible = true;
-            BackgroundFile = ""; BackgroundShade = 0.65;
+            BackgroundFile = ""; BackgroundShade = 0.65; BuiltInSkin = "";
         }
         public AppSettings Copy() { return (AppSettings)MemberwiseClone(); }
         public void Validate()
         {
             if (Theme != "light" && Theme != "warm" && Theme != "dark") throw new InvalidDataException("主题设置无效。");
+            if (BuiltInSkin != "" && BuiltInSkin != "mountain" && BuiltInSkin != "sunlit") throw new InvalidDataException("内置皮肤设置无效。");
             if (BackgroundFile == null || (BackgroundFile != "" && (!BackgroundFile.StartsWith("background-", StringComparison.Ordinal) || !BackgroundFile.EndsWith(".png", StringComparison.Ordinal) || BackgroundFile.Length != 47 || !BackgroundFile.Substring(11, 32).All(Uri.IsHexDigit)))) throw new InvalidDataException("背景图片设置无效。");
             if (Double.IsNaN(BackgroundShade) || Double.IsInfinity(BackgroundShade) || BackgroundShade < 0.2 || BackgroundShade > 0.9) throw new InvalidDataException("背景遮罩应为 20% 至 90%。");
             if (DataPath == null || (DataPath != "" && !Path.IsPathRooted(DataPath))) throw new InvalidDataException("数据路径设置无效。");

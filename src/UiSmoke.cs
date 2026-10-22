@@ -176,6 +176,36 @@ namespace DeskTodo
                 Check(app.BackgroundImage != null && app.BackgroundImage.IsFrozen && app.BackgroundImage.PixelWidth == 1200, "image is bounded cached and preserves aspect ratio");
                 string imported = app.Settings.BackgroundFile; Check(SettingsFile.Load(app.SettingsPath).BackgroundFile == imported && File.Exists(Path.Combine(root, "Backgrounds", imported)), "managed image and settings persist");
                 File.Move(source, source + ".moved"); app.LoadBackground(); Check(app.BackgroundImage != null, "moving original image does not break saved background");
+                var skinButton = Controls<Button>(app.Main).First(b => (b.Content as string) == "换肤");
+                string[] skinKeys = { "mountain", "sunlit" }, skinNames = { "山湖晨光", "晴日拾光" };
+                var sampleDate = new DateTime(2026, 10, 22);
+                app.Store.Change(items => { items.Add(new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "示例：组会", Date = Dates.Key(sampleDate), Time = "14:00", Tags = new List<string> { "科研" }, CreatedUtc = DateTime.UtcNow.ToString("o") }); });
+                string stateBeforeSkins = File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json"));
+                for (int n = 0; n < skinKeys.Length; n++)
+                {
+                    string key = skinKeys[n]; app.ThemeMenu(skinButton); Pump();
+                    var skinItem = skinButton.ContextMenu.Items.OfType<MenuItem>().First(i => (i.Header as string) == skinNames[n]);
+                    skinItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); skinButton.ContextMenu.IsOpen = false; Pump();
+                    Check(app.Settings.BuiltInSkin == key && app.BackgroundImage != null && app.BackgroundImage.IsFrozen && app.BackgroundImage.PixelWidth >= 1200, "built-in menu loads embedded wallpaper " + key);
+                    Check(app.Settings.BackgroundFile == imported && File.Exists(Path.Combine(root, "Backgrounds", imported)), "built-in selection preserves custom image " + key);
+                    Check(SettingsFile.Load(app.SettingsPath).BuiltInSkin == key, "built-in choice persists " + key);
+                    var oldImage = app.BackgroundImage; app.LoadBackground(); Check(app.BackgroundImage != null && app.BackgroundImage != oldImage, "built-in reload decodes embedded resource " + key);
+                    Check(((SolidColorBrush)Application.Current.Resources["Panel"]).Opacity < 0.7, "built-in panels reveal scenery " + key);
+                    app.ThemeMenu(skinButton); Pump(); Check(skinButton.ContextMenu.Items.OfType<MenuItem>().Single(i => i.IsChecked).Header.ToString() == skinNames[n], "built-in menu has one active selection " + key); skinButton.ContextMenu.IsOpen = false;
+                    foreach (string page in new[] { "月历", "今天", "全部", "番茄钟", "学习统计", "学习报告", "综测" })
+                    {
+                        app.Main.SelectPage(page); if (page == "月历") app.Main.SelectDay(sampleDate); app.Main.UpdateLayout();
+                        Check(Controls<Image>(app.Main).Any(i => i.Visibility == Visibility.Visible && i.Source != null), "built-in backdrop visible on " + page + " " + key);
+                        Capture(app.Main, Path.Combine(root, "skin-" + key + "-" + page + ".png"));
+                    }
+                    app.Main.Width = 960; app.Main.Height = 650; app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "skin-" + key + "-small.png")); app.Main.Width = 1160; app.Main.Height = 790;
+                }
+                Check(File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json")) == stateBeforeSkins, "skin switching leaves task and learning data unchanged");
+                Check(app.ResetBackground() && app.Settings.BuiltInSkin == "" && app.BackgroundImage == null, "reset clears built-in selection");
+                Check(app.SelectBuiltInSkin("mountain"), "built-in selection remains reusable");
+                Check(app.ImportBackground(Path.Combine(root, "Backgrounds", imported)) && app.Settings.BuiltInSkin == "", "custom import leaves built-in mode");
+                Check(app.SelectBuiltInSkin("sunlit") && app.ChangeTheme("dark") && app.Settings.BuiltInSkin == "" && app.BackgroundImage != null, "plain theme returns to preserved custom background");
+                imported = app.Settings.BackgroundFile; app.Main.SelectPage("月历");
                 foreach (string theme in new[] { "warm", "light", "dark" }) { app.ChangeTheme(theme); app.Main.UpdateLayout(); Check(Controls<Image>(app.Main).Any(i => i.Source == app.BackgroundImage && i.Visibility == Visibility.Visible), "background survives theme switching " + theme); Capture(app.Main, Path.Combine(root, "background-" + theme + ".png")); }
                 var themeButton = Controls<Button>(app.Main).First(b => (b.Content as string) == "换肤"); app.ThemeMenu(themeButton); Pump();
                 var menu = themeButton.ContextMenu; Check(menu.Items.OfType<MenuItem>().Any(i => (string)i.Header == "选择背景图片…") && menu.Items.OfType<MenuItem>().Any(i => (string)i.Header == "恢复默认背景"), "change skin menu exposes choose and restore commands");

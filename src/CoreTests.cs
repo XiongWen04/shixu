@@ -41,6 +41,14 @@ class CoreTests
             }
             string legacyCredits = Path.Combine(root, "credits-v6.json"); File.WriteAllText(legacyCredits, "{\"Version\":6,\"Items\":[]}");
             Check(DataStore.ReadState(legacyCredits).Credits.Count == 0, "v6 data defaults to empty credit list");
+            var skinSettings = new AppSettings(); Check(skinSettings.BuiltInSkin == "", "existing defaults do not select a built-in skin");
+            skinSettings.BuiltInSkin = "mountain"; skinSettings.Validate();
+            string skinPath = Path.Combine(root, "skin-settings.json"); SettingsFile.Save(skinPath, skinSettings);
+            Check(SettingsFile.Load(skinPath).BuiltInSkin == "mountain", "built-in skin persists");
+            skinSettings.BuiltInSkin = "sunlit"; skinSettings.Validate();
+            skinSettings.BuiltInSkin = "../private"; Throws(() => skinSettings.Validate(), "unknown built-in skin rejected");
+            skinSettings.BuiltInSkin = null; Throws(() => skinSettings.Validate(), "null built-in skin rejected");
+            File.WriteAllText(skinPath, "{\"Theme\":\"warm\"}"); Check(SettingsFile.Load(skinPath).BuiltInSkin == "", "legacy settings default to no built-in skin");
             var backgroundSettings = new AppSettings(); Check(backgroundSettings.BackgroundFile == "" && backgroundSettings.BackgroundShade == 0.65, "default background remains disabled with readable shade");
             backgroundSettings.BackgroundFile = "../private.png"; Throws(() => backgroundSettings.Validate(), "background settings reject paths outside managed image directory");
             backgroundSettings.BackgroundFile = "background-" + Guid.NewGuid().ToString("N") + ".png"; backgroundSettings.Validate();
