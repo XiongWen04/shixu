@@ -21,6 +21,7 @@ namespace DeskTodo
         [OnDeserializing] void Defaults(StreamingContext c) { Tags = new List<string>(); }
         [DataMember] public string CreatedUtc;
         [DataMember] public bool Done;
+        [DataMember(EmitDefaultValue = false)] public decimal CreditPoints;
         [DataMember(EmitDefaultValue = false)] public bool Important;
         [DataMember(EmitDefaultValue = false)] public bool Reminder;
         [DataMember(EmitDefaultValue = false)] public string NotifiedFor;
@@ -50,7 +51,7 @@ namespace DeskTodo
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 7;
+        [DataMember(IsRequired = true)] public int Version = 8;
         [DataMember] public List<CreditRecord> Credits = new List<CreditRecord>();
         [DataMember] public int DailyGoalMinutes;
         [DataMember(IsRequired = true)] public List<TodoItem> Items = new List<TodoItem>();
@@ -61,7 +62,7 @@ namespace DeskTodo
         public TodoState Copy() { return new TodoState { Credits = Credits.Select(c => c.Copy()).ToList(), DailyGoalMinutes = DailyGoalMinutes, Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
         public void Validate()
         {
-            if (Version < 1 || Version > 7) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version < 1 || Version > 8) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
             if (Credits == null || Credits.Count > 10000) throw new InvalidDataException("综测记录无效或超过 10000 条。");
             var creditIds = new HashSet<string>();
             foreach (var credit in Credits) { if (credit == null || !creditIds.Add(credit.Id)) throw new InvalidDataException("综测记录重复或无效。"); credit.Validate(); }
@@ -85,6 +86,7 @@ namespace DeskTodo
                 Guid id;
                 if (i == null || !Guid.TryParse(i.Id, out id) || !ids.Add(i.Id)) throw new InvalidDataException("待办编号无效或重复。");
                 if (String.IsNullOrWhiteSpace(i.Title) || i.Title.Length > 200) throw new InvalidDataException("标题不能为空，最多 200 字。");
+                if (i.CreditPoints < 0 || i.CreditPoints > 10000) throw new InvalidDataException("综测分数应大于 0，且不超过 10000；0 表示普通任务。");
                 if (i.Note != null && i.Note.Length > 4000) throw new InvalidDataException("备注最多 4000 字。");
                 if (i.Tags == null || i.Tags.Count > 10 || i.Tags.Any(t => String.IsNullOrWhiteSpace(t) || t != t.Trim() || t.Length > 20 || t.IndexOfAny(new[] { ',', '，', ';', '；' }) >= 0) || i.Tags.Distinct(StringComparer.OrdinalIgnoreCase).Count() != i.Tags.Count) throw new InvalidDataException("最多 10 个标签，每个最多 20 字，不能重复或含分隔符。");
                 DateTime parsed;
@@ -105,14 +107,32 @@ namespace DeskTodo
         [DataMember(IsRequired = true)] public string Title;
         [DataMember(IsRequired = true)] public string Date;
         [DataMember(IsRequired = true)] public decimal Points;
+        [DataMember(EmitDefaultValue = false)] public string SourceTaskId;
         public CreditRecord Copy() { return (CreditRecord)MemberwiseClone(); }
         public void Validate()
         {
             Guid id; DateTime date;
             if (!Guid.TryParse(Id, out id)) throw new InvalidDataException("综测记录编号无效。");
+            if (SourceTaskId != null && !Guid.TryParse(SourceTaskId, out id)) throw new InvalidDataException("综测来源任务编号无效。");
             if (String.IsNullOrWhiteSpace(Title) || Title.Length > 200) throw new InvalidDataException("活动名称不能为空，最多 200 字。");
             if (!DateTime.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)) throw new InvalidDataException("请选择有效的活动日期。");
             if (Points <= 0 || Points > 10000) throw new InvalidDataException("加分分数应大于 0，且不超过 10000。");
+        }
+    }
+
+    public static class TaskCredits
+    {
+        public static void Sync(TodoState state, TodoItem item, DateTime today)
+        {
+            var record = state.Credits.FirstOrDefault(c => c.SourceTaskId == item.Id);
+            if (!item.Done || item.CreditPoints == 0) { state.Credits.RemoveAll(c => c.SourceTaskId == item.Id); return; }
+            if (record == null)
+            {
+                record = new CreditRecord { Id = Guid.NewGuid().ToString("N"), SourceTaskId = item.Id, Date = item.Date ?? Dates.Key(today) };
+                state.Credits.Add(record);
+            }
+            record.Title = item.Title; record.Points = item.CreditPoints;
+            if (item.Date != null) record.Date = item.Date;
         }
     }
 
@@ -414,7 +434,7 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 7; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 8; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
         public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }

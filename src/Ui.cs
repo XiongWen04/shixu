@@ -169,6 +169,15 @@ namespace DeskTodo
             var repeat = new ComboBox { ItemsSource = repeatNames, SelectedIndex = 0, Height = 36 }; AutomationProperties.SetName(repeat, "重复周期"); fields.Children.Add(repeat);
             if (existing != null && existing.SeriesId != null) { var rule = app.Store.State.Series.First(r => r.Id == existing.SeriesId); repeat.SelectedIndex = Array.IndexOf(repeatKinds, rule.Kind); repeat.IsEnabled = false; fields.Children.Add(Ui.Text("编辑只影响当次；右键任务可停止后续重复。", 11, "Muted")); }
             var important = new CheckBox { Content = "重要任务（星标置顶）", IsChecked = existing != null && existing.Important, Margin = new Thickness(0, 12, 0, 0) }; AutomationProperties.SetName(important, "重要任务"); fields.Children.Add(important);
+            var credit = new CheckBox { Content = "综测活动（完成后自动记录加分）", IsChecked = existing != null && existing.CreditPoints > 0, Margin = new Thickness(0, 14, 0, 0) };
+            AutomationProperties.SetName(credit, "综测活动"); fields.Children.Add(credit);
+            var creditFields = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+            creditFields.Children.Add(Ui.Text("综测分数（支持小数）", 12, "Muted"));
+            var creditPoints = new TextBox { Text = existing != null && existing.CreditPoints > 0 ? existing.CreditPoints.ToString(CultureInfo.InvariantCulture) : "", MaxLength = 32, Margin = new Thickness(0, 6, 0, 0) };
+            AutomationProperties.SetName(creditPoints, "任务综测分数"); creditFields.Children.Add(creditPoints);
+            creditFields.Children.Add(Ui.Text("标记完成时记入；撤销完成会撤回。无日期任务使用完成当天。", 11, "Muted")); fields.Children.Add(creditFields);
+            Action updateCredit = () => creditFields.Visibility = credit.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            credit.Checked += (s, e) => updateCredit(); credit.Unchecked += (s, e) => updateCredit(); updateCredit();
             var locationLabel = Ui.Text("地点（可选）", 12, "Muted"); locationLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(locationLabel);
             var location = new TextBox { Text = existing == null ? "" : existing.Location ?? "", MaxLength = 200, ToolTip = "例如：会议室、实验室、线上" }; AutomationProperties.SetName(location, "待办地点"); fields.Children.Add(location);
             var noteLabel = Ui.Text("备注（可选）", 12, "Muted"); noteLabel.Margin = new Thickness(0, 15, 0, 6); fields.Children.Add(noteLabel);
@@ -186,6 +195,9 @@ namespace DeskTodo
                 if (noDate.IsChecked == true && repeat.SelectedIndex > 0 && repeat.IsEnabled) { error.Text = "重复任务需要设置日期。"; return; }
                 if (existing != null && existing.SeriesId != null && noDate.IsChecked == true) { error.Text = "重复任务需要日期；请先停止后续重复。"; return; }
                 var item = existing == null ? new TodoItem { Id = Guid.NewGuid().ToString("N"), CreatedUtc = DateTime.UtcNow.ToString("o") } : existing.Copy();
+                decimal points = 0;
+                if (credit.IsChecked == true && (!Decimal.TryParse(creditPoints.Text.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out points) || points <= 0 || points > 10000)) { error.Text = "请填写大于 0 且不超过 10000 的综测分数。"; creditPoints.Focus(); return; }
+                item.CreditPoints = points;
                 item.Title = title.Text.Trim(); item.Note = note.Text.Trim(); item.Done = done.IsChecked == true;
                 item.Date = noDate.IsChecked == true ? null : Dates.Key(picker.SelectedDate.Value);
                 item.Time = item.Date != null && timed.IsChecked == true ? hours.SelectedItem + ":" + minutes.SelectedItem : null;

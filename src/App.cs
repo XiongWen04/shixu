@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.5.0.0")]
+[assembly: AssemblyVersion("2.6.0.0")]
 
 namespace DeskTodo
 {
@@ -195,6 +195,7 @@ namespace DeskTodo
                     if (item.SeriesId == null && repeatKind != null) Schedule.AddSeries(state, item.Copy(), repeatKind);
                     else state.Items.Add(item.Copy());
                     Schedule.Expand(state, DateTime.Today.AddDays(62));
+                    TaskCredits.Sync(state, item, DateTime.Today);
                 });
                 Refresh(); return true;
             }
@@ -253,7 +254,11 @@ namespace DeskTodo
             catch (Exception ex) { Refresh(); if (TestMode) throw; Error("保存失败", ex); return false; }
         }
         public void Refresh() { if (Main != null) Main.Refresh(); if (Widget != null) Widget.Refresh(); }
-        public void Toggle(string id, bool done) { Mutate(items => items.First(i => i.Id == id).Done = done); }
+        public void Toggle(string id, bool done)
+        {
+            try { Store.ChangeState(state => { var item = state.Items.First(i => i.Id == id); item.Done = done; TaskCredits.Sync(state, item, DateTime.Today); }); Refresh(); }
+            catch (Exception ex) { Refresh(); if (TestMode) throw; Error("保存失败", ex); }
+        }
         public void Delete(string id)
         {
             var item = Store.State.Items.First(i => i.Id == id).Copy();
@@ -416,7 +421,7 @@ namespace DeskTodo
         }
         public void Import(string path)
         {
-            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
+            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Credits = imported.Credits; state.DailyGoalMinutes = imported.DailyGoalMinutes; state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
             catch (Exception ex) { Error("导入失败", ex); }
         }
         public void Exit()

@@ -345,6 +345,34 @@ namespace DeskTodo
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(app.Store.State.Credits.Single().Points == 0.5m, "delete removes selected record");
                 app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders after credits");
+                Exception taskError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<EditWindow>().FirstOrDefault();
+                    try
+                    {
+                        Check(editor != null, "task credit editor opens");
+                        Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "待办标题").Text = "示例活动：校园志愿服务";
+                        var enabled = Controls<CheckBox>(editor).First(t => AutomationProperties.GetName(t) == "综测活动");
+                        Check(enabled.IsChecked != true, "ordinary task defaults to no credit"); enabled.IsChecked = true;
+                        var points = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "任务综测分数");
+                        var save = Controls<Button>(editor).First(b => (b.Content as string) == "保存待办");
+                        points.Text = "0"; save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "zero task credit rejected in editor");
+                        points.Text = "0.5"; editor.UpdateLayout(); Capture(editor, Path.Combine(root, "task-credit-editor.png"));
+                        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(!editor.IsVisible, "task credit editor saves");
+                    }
+                    catch (Exception ex) { taskError = ex; }
+                    finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                }));
+                app.Edit(null, new DateTime(2026, 10, 23)); if (taskError != null) throw taskError;
+                var task = app.Store.State.Items.Single(i => i.Title == "示例活动：校园志愿服务");
+                Check(task.CreditPoints == .5m && app.Store.State.Credits.Count == 1, "pending activity does not add credit");
+                app.Toggle(task.Id, true); app.Toggle(task.Id, true);
+                Check(app.Store.State.Credits.Count == 2 && app.Store.State.Credits.Single(c => c.SourceTaskId == task.Id).Points == .5m, "controller completes without duplicate credit");
+                app.Toggle(task.Id, false); Check(app.Store.State.Credits.Count == 1, "controller undo retracts linked credit only");
+                app.Toggle(task.Id, true); task = app.Store.State.Items.Single(i => i.Id == task.Id).Copy(); task.CreditPoints = 1.5m;
+                app.SaveTodo(task, task, null); Check(app.Store.State.Credits.Single(c => c.SourceTaskId == task.Id).Points == 1.5m, "completed task edit updates credit");
+                app.Main.SelectPage("综测"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "task-credit-result.png"));
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CREDITS PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }

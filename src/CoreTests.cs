@@ -17,6 +17,30 @@ class CoreTests
         try
         {
             var credits = new TodoState();
+            var activity = Item("综测任务", "2026-10-23"); activity.CreditPoints = 0.5m; credits.Items.Add(activity);
+            TaskCredits.Sync(credits, activity, DateTime.Today); Check(credits.Credits.Count == 0, "unfinished activity earns no credit");
+            activity.Done = true; TaskCredits.Sync(credits, activity, DateTime.Today); TaskCredits.Sync(credits, activity, DateTime.Today);
+            Check(credits.Credits.Count == 1 && credits.Credits[0].Points == 0.5m, "completion adds exactly one linked credit");
+            activity.CreditPoints = 1.25m; activity.Title = "修改后的活动"; TaskCredits.Sync(credits, activity, DateTime.Today);
+            Check(credits.Credits.Single().Title == activity.Title && credits.Credits.Single().Points == 1.25m, "editing completed activity updates its credit");
+            activity.Done = false; TaskCredits.Sync(credits, activity, DateTime.Today); Check(credits.Credits.Count == 0, "undo completion retracts credit");
+            activity.Date = null; activity.Done = true; TaskCredits.Sync(credits, activity, new DateTime(2026, 10, 24));
+            Check(credits.Credits.Single().Date == "2026-10-24", "undated activity uses completion date");
+            activity.CreditPoints = 0; TaskCredits.Sync(credits, activity, DateTime.Today); Check(credits.Credits.Count == 0, "ordinary completed tasks earn no credit");
+            activity.CreditPoints = -1; Throws(() => credits.Validate(), "negative task credit rejected"); activity.CreditPoints = 10001; Throws(() => credits.Validate(), "excessive task credit rejected");
+            activity.CreditPoints = .5m; activity.Date = "2026-10-23"; activity.Done = false;
+            var repeated = new TodoState(); Schedule.AddSeries(repeated, activity.Copy(), "daily"); Schedule.Expand(repeated, new DateTime(2026, 10, 25));
+            foreach (var occurrence in repeated.Items) { occurrence.Done = true; TaskCredits.Sync(repeated, occurrence, DateTime.Today); }
+            Check(repeated.Credits.Count == 3 && repeated.Credits.Sum(c => c.Points) == 1.5m, "repeat occurrences receive separate credits");
+            using (var linkedStore = DataStore.Open(Path.Combine(root, "linked")))
+            {
+                linkedStore.ChangeState(state => { state.Items = repeated.Items; state.Series = repeated.Series; state.Credits = repeated.Credits; });
+                var linkedRestored = DataStore.ReadState(Path.Combine(linkedStore.DirectoryPath, "tasks.json"));
+                Check(linkedRestored.Items.All(i => i.CreditPoints == .5m) && linkedRestored.Credits.All(c => c.SourceTaskId != null), "task credit settings and links persist");
+                Throws(() => linkedStore.ChangeState(state => { state.Credits[0].Points = -1; state.Items[0].Done = false; }), "task and credit mutation fails atomically");
+                Check(linkedStore.State.Items[0].Done && linkedStore.State.Credits[0].Points == .5m, "failed transaction preserves task and credit");
+            }
+            credits.Items.Clear();
             credits.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "志愿服务", Date = "2026-10-22", Points = 0.1m });
             credits.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "学术讲座", Date = "2026-10-21", Points = 0.2m });
             credits.Validate(); Check(credits.Credits.Sum(c => c.Points) == 0.3m, "credit decimal total is exact");
@@ -33,7 +57,7 @@ class CoreTests
                 creditStore.Change(items => items.Add(Item("普通待办", null)));
                 string creditExport = Path.Combine(root, "credits-export.json"); creditStore.Export(creditExport);
                 var creditRestored = DataStore.ReadState(creditExport);
-                Check(creditRestored.Version == 7 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
+                Check(creditRestored.Version == 8 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
                 creditStore.ChangeState(state => state.Credits.Clear()); creditStore.Import(creditExport);
                 Check(creditStore.State.Credits.Count == 2, "import replaces and restores credits");
                 Throws(() => creditStore.ChangeState(state => state.Credits[0].Points = -1), "invalid credit save fails atomically");
@@ -204,10 +228,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 7 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 8 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 7, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 8, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");
