@@ -163,6 +163,31 @@ namespace DeskTodo
                 }
                 Check(File.ReadAllText(Path.Combine(app.Store.DirectoryPath, "tasks.json")) == unchanged, "navigation and skin switching leave example data unchanged");
                 app.Main.SelectPage("月历"); app.Main.SelectDay(day);
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.SelectDay(day); Pump();
+                    var trigger = Controls<Button>(app.Main).First(b => (b.Content as string) == "···"); trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                    var menu = Controls<Border>(app.Main).Select(b => b.ContextMenu).First(m => m != null && m.IsOpen); menu.UpdateLayout();
+                    var frame = (Border)menu.Template.FindName("MenuFrame", menu);
+                    Check(frame != null && frame.CornerRadius.TopLeft == 12 && menu.ActualWidth >= 216, "shared rounded task menu " + theme);
+                    Check(menu.Items.OfType<MenuItem>().All(i => i.ActualHeight >= 36 && i.Icon != null), "readable icon menu targets " + theme);
+                    var danger = menu.Items.OfType<MenuItem>().Single(i => (i.Header as string) == "删除（可撤销）");
+                    Check(danger.Tag as string == "Danger" && danger.Foreground == Application.Current.Resources["Danger"], "delete has semantic danger color " + theme);
+                    CaptureMenu(menu, Path.Combine(root, "task-menu-" + theme + ".png")); menu.IsOpen = false;
+                    var skin = Controls<Button>(app.Main).First(b => (b.Content as string) == "换肤"); app.ThemeMenu(skin); Pump();
+                    var themes = skin.ContextMenu; Check(themes.Template.FindName("MenuFrame", themes) != null, "skin menu shares surface " + theme);
+                    var selected = themes.Items.OfType<MenuItem>().Single(i => i.IsChecked);
+                    Check(((System.Windows.Shapes.Path)selected.Template.FindName("Check", selected)).Visibility == Visibility.Visible, "checked theme indicator " + theme);
+                    var shade = themes.Items.OfType<MenuItem>().First(i => (i.Header as string) == "背景遮罩");
+                    if (shade.IsEnabled) { shade.IsSubmenuOpen = true; Pump(); var popup = (Popup)shade.Template.FindName("PART_Popup", shade); Check(popup.IsOpen && popup.Child.IsVisible, "nested shade menu opens " + theme); shade.IsSubmenuOpen = false; }
+                    CaptureMenu(themes, Path.Combine(root, "theme-menu-" + theme + ".png")); themes.IsOpen = false;
+                }
+                app.SelectBuiltInSkin("sunlit"); var themeOwner = Controls<Button>(app.Main).First(b => (b.Content as string) == "换肤"); app.ThemeMenu(themeOwner); Pump();
+                var shadeMenu = themeOwner.ContextMenu.Items.OfType<MenuItem>().First(i => (i.Header as string) == "背景遮罩"); shadeMenu.IsSubmenuOpen = true; Pump();
+                var shadePopup = (Popup)shadeMenu.Template.FindName("PART_Popup", shadeMenu);
+                Check(shadePopup.IsOpen && shadePopup.Child.IsVisible && ((FrameworkElement)shadePopup.Child).ActualWidth >= 176, "nested shade menu has visible rounded surface");
+                var checkedShade = shadeMenu.Items.OfType<MenuItem>().Single(i => i.IsChecked); Check(((System.Windows.Shapes.Path)checkedShade.Template.FindName("Check", checkedShade)).Visibility == Visibility.Visible, "nested menu shows selected opacity");
+                shadeMenu.IsSubmenuOpen = false; themeOwner.ContextMenu.IsOpen = false;
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "LAYOUT PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
@@ -234,6 +259,11 @@ namespace DeskTodo
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "DESKTOP C PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
+        static void CaptureMenu(ContextMenu menu, string path)
+        {
+            menu.UpdateLayout(); var bitmap = new RenderTargetBitmap((int)Math.Ceiling(menu.ActualWidth), (int)Math.Ceiling(menu.ActualHeight), 96, 96, PixelFormats.Pbgra32); bitmap.Render(menu);
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); using (var file = File.Create(path)) encoder.Save(file);
         }
         public static void RunBackground(AppController app, string root)
         {

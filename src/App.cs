@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.6.0.0")]
+[assembly: AssemblyVersion("2.6.1.0")]
 
 namespace DeskTodo
 {
@@ -320,10 +320,10 @@ namespace DeskTodo
                 item.Click += (s, e) => SelectBuiltInSkin(key); menu.Items.Add(item);
             }
             menu.Items.Add(new System.Windows.Controls.Separator());
-            var select = new System.Windows.Controls.MenuItem { Header = "选择背景图片…" }; select.Click += (s, e) => { var picker = new Microsoft.Win32.OpenFileDialog { Title = "选择拾序背景", Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*" }; if (picker.ShowDialog(Main) == true) ImportBackground(picker.FileName); }; menu.Items.Add(select);
-            var shade = new System.Windows.Controls.MenuItem { Header = "背景遮罩" , IsEnabled = BackgroundImage != null };
+            var select = new System.Windows.Controls.MenuItem { Header = "选择背景图片…", Icon = Ui.MenuIcon("\uE8B9") }; select.Click += (s, e) => { var picker = new Microsoft.Win32.OpenFileDialog { Title = "选择拾序背景", Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*" }; if (picker.ShowDialog(Main) == true) ImportBackground(picker.FileName); }; menu.Items.Add(select);
+            var shade = new System.Windows.Controls.MenuItem { Header = "背景遮罩", Icon = Ui.MenuIcon("\uE790"), IsEnabled = BackgroundImage != null };
             foreach (double value in new[] { 0.2, 0.4, 0.65, 0.8, 0.9 }) { double opacity = value; var choice = new System.Windows.Controls.MenuItem { Header = (value * 100).ToString("0") + "%", IsCheckable = true, IsChecked = Math.Abs(Settings.BackgroundShade - value) < 0.001 }; choice.Click += (s, e) => SetBackgroundShade(opacity); shade.Items.Add(choice); } menu.Items.Add(shade);
-            var reset = new System.Windows.Controls.MenuItem { Header = "恢复默认背景", IsEnabled = Settings.BackgroundFile != "" || Settings.BuiltInSkin != "" }; reset.Click += (s, e) => ResetBackground(); menu.Items.Add(reset);
+            var reset = new System.Windows.Controls.MenuItem { Header = "恢复默认背景", Icon = Ui.MenuIcon("\uE777"), IsEnabled = Settings.BackgroundFile != "" || Settings.BuiltInSkin != "" }; reset.Click += (s, e) => ResetBackground(); menu.Items.Add(reset);
             owner.ContextMenu = menu; menu.PlacementTarget = owner; menu.IsOpen = true;
         }
         public BitmapSource BackgroundImage { get; private set; }

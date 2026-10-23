@@ -81,13 +81,15 @@ namespace DeskTodo
             if (flat) { card.Padding = new Thickness(12, 16, 10, 16); card.Margin = new Thickness(0, 0, 0, 12); card.CornerRadius = new CornerRadius(12); card.ToolTip = item.Title + "\n" + (item.Note ?? ""); card.SetResourceReference(Border.BackgroundProperty, "SelectedDay"); if (item.Important) { card.BorderThickness = new Thickness(3, 0, 0, 0); card.SetResourceReference(Border.BorderBrushProperty, "Accent"); } }
             if (compact) { card.SetResourceReference(Border.BackgroundProperty, "GlassCard"); card.SetResourceReference(Border.BorderBrushProperty, "GlassBorder"); }
             var menu = new ContextMenu();
-            var editMenu = new MenuItem { Header = "编辑" }; editMenu.Click += (s, e) => app.Edit(item, null); menu.Items.Add(editMenu);
-            var deleteMenu = new MenuItem { Header = "删除（可撤销）" }; deleteMenu.Click += (s, e) => app.Delete(item.Id); menu.Items.Add(deleteMenu);
-            if (item.SeriesId != null) { var stop = new MenuItem { Header = "停止后续重复" }; stop.Click += (s, e) => app.StopRepeating(item); menu.Items.Add(stop); }
-            var importantMenu = new MenuItem { Header = item.Important ? "取消重要" : "标为重要" }; importantMenu.Click += (s, e) => app.ToggleImportant(item.Id); menu.Items.Add(importantMenu);
+            var editMenu = new MenuItem { Header = "编辑", Icon = MenuIcon("\uE70F") }; editMenu.Click += (s, e) => app.Edit(item, null); menu.Items.Add(editMenu);
+            var importantMenu = new MenuItem { Header = item.Important ? "取消重要" : "标为重要", Icon = MenuIcon(item.Important ? "\uE735" : "\uE734") }; importantMenu.Click += (s, e) => app.ToggleImportant(item.Id); menu.Items.Add(importantMenu);
+            if (item.SeriesId != null) { var stop = new MenuItem { Header = "停止后续重复", Icon = MenuIcon("\uE8EE") }; stop.Click += (s, e) => app.StopRepeating(item); menu.Items.Add(stop); }
+            menu.Items.Add(new Separator());
+            var deleteMenu = new MenuItem { Header = "删除（可撤销）", Tag = "Danger", Icon = MenuIcon("\uE74D") }; deleteMenu.Click += (s, e) => app.Delete(item.Id); menu.Items.Add(deleteMenu);
             if (flat) { star.Content = "···"; star.FontSize = 18; star.ToolTip = "更多操作"; AutomationProperties.SetName(star, "更多操作 " + item.Title); star.Click += (s, e) => { menu.PlacementTarget = star; menu.IsOpen = true; }; }
             card.ContextMenu = menu; return card;
         }
+        public static TextBlock MenuIcon(string glyph) { return new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 15, VerticalAlignment = VerticalAlignment.Center }; }
         public static void Empty(Panel panel, string title, string hint)
         {
             var box = new StackPanel { Margin = new Thickness(10, 26, 10, 26) };
