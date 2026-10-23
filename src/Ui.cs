@@ -29,7 +29,7 @@ namespace DeskTodo
             var border = new Border { Child = content, Padding = padding, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1) };
             border.SetResourceReference(Border.BackgroundProperty, "Panel"); border.SetResourceReference(Border.BorderBrushProperty, "Line"); return border;
         }
-        public static ScrollViewer Scroll(UIElement content) { return new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }; }
+        public static ScrollViewer Scroll(UIElement content) { var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }; scroll.SetResourceReference(FrameworkElement.StyleProperty, "FormScroll"); return scroll; }
         public static void Icon(Window window)
         {
             window.SetResourceReference(FrameworkElement.StyleProperty, typeof(Window));
@@ -131,7 +131,7 @@ namespace DeskTodo
     {
         public EditWindow(AppController app, TodoItem existing, DateTime? initialDate)
         {
-            Title = existing == null ? "添加待办" : "编辑待办"; Width = 520; Height = Math.Min(700, SystemParameters.WorkArea.Height - 80); MinWidth = 450; MinHeight = 520;
+            Title = existing == null ? "添加待办" : "编辑待办"; Width = 600; Height = Math.Min(860, SystemParameters.WorkArea.Height - 64); MinWidth = 500; MinHeight = 580;
             WindowStartupLocation = WindowStartupLocation.CenterScreen; ShowInTaskbar = false; Ui.Icon(this);
             SourceInitialized += (s, e) => NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark");
             var root = new DockPanel { Margin = new Thickness(26) }; Content = root;
@@ -189,6 +189,31 @@ namespace DeskTodo
             var tags = new TextBox { Text = existing == null ? "" : String.Join("，", existing.Tags), MaxLength = 220, ToolTip = "例如：课程，论文，生活；最多 10 个，每个最多 20 字" }; AutomationProperties.SetName(tags, "待办标签"); fields.Children.Add(tags);
             var done = new CheckBox { Content = "已完成", IsChecked = existing != null && existing.Done, Margin = new Thickness(0, 14, 0, 0) }; fields.Children.Add(done);
             var error = Ui.Text("", 12, "Danger"); error.Margin = new Thickness(0, 8, 0, 0); fields.Children.Add(error);
+            var heading = fields.Children[0];
+            var repeatHint = fields.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text.StartsWith("编辑只影响当次"));
+            fields.Children.Clear(); fields.Children.Add(heading);
+            var subtitle = Ui.Text("把安排写清楚，接下来的事交给拾序。", 12, "Muted"); subtitle.Margin = new Thickness(0, 6, 0, 0); fields.Children.Add(subtitle);
+            fields.Children.Add(titleLabel); fields.Children.Add(title);
+            Action<string, UIElement[]> section = (name, controls) =>
+            {
+                var label = Ui.Text(name, 14, "Text", true); label.Margin = new Thickness(0, 18, 0, 9); fields.Children.Add(label);
+                var body = new StackPanel(); foreach (var control in controls) body.Children.Add(control); fields.Children.Add(Ui.Card(body, new Thickness(16)));
+            };
+            dateRow.Orientation = Orientation.Vertical; timeRow.Orientation = Orientation.Vertical;
+            noDate.Margin = timed.Margin = new Thickness(0, 9, 0, 0); picker.Width = Double.NaN; picker.HorizontalAlignment = HorizontalAlignment.Stretch;
+            dateLabel.Margin = timeLabel.Margin = new Thickness(0, 0, 0, 6);
+            var dateColumn = new StackPanel { Margin = new Thickness(0, 0, 10, 0) }; dateColumn.Children.Add(dateLabel); dateColumn.Children.Add(dateRow);
+            var timeColumn = new StackPanel { Margin = new Thickness(10, 0, 0, 0) }; timeColumn.Children.Add(timeLabel); timeColumn.Children.Add(timeRow);
+            var scheduleGrid = new Grid(); scheduleGrid.ColumnDefinitions.Add(new ColumnDefinition()); scheduleGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            scheduleGrid.Children.Add(dateColumn); Grid.SetColumn(timeColumn, 1); scheduleGrid.Children.Add(timeColumn);
+            var scheduleFields = new StackPanel(); scheduleFields.Children.Add(scheduleGrid); scheduleFields.Children.Add(repeatLabel); scheduleFields.Children.Add(repeat); if (repeatHint != null) scheduleFields.Children.Add(repeatHint);
+            section("日程安排", new UIElement[] { scheduleFields });
+            reminder.Margin = new Thickness(0, 0, 24, 0); important.Margin = new Thickness(0);
+            var flags = new WrapPanel(); flags.Children.Add(reminder); flags.Children.Add(important);
+            done.Margin = new Thickness(0, 14, 0, 0); section("任务属性", new UIElement[] { flags, credit, creditFields, done });
+            locationLabel.Margin = new Thickness(0, 0, 0, 6);
+            section("补充信息", new UIElement[] { locationLabel, location, tagLabel, tags, noteLabel, note });
+            fields.Children.Add(error);
             var save = Ui.Button("保存待办", () =>
             {
                 if (String.IsNullOrWhiteSpace(title.Text)) { error.Text = "请填写待办标题。"; title.Focus(); return; }

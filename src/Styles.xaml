@@ -102,8 +102,8 @@
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-      <StackPanel Orientation="Horizontal">
-        <Border x:Name="Box" Width="19" Height="19" BorderBrush="{DynamicResource Muted}" BorderThickness="1" CornerRadius="4" Background="{DynamicResource Panel}" VerticalAlignment="Center">
+      <StackPanel Orientation="Horizontal" Background="Transparent">
+        <Border x:Name="Box" Width="18" Height="18" BorderBrush="{DynamicResource Muted}" BorderThickness="1" CornerRadius="5" Background="{DynamicResource Panel}" VerticalAlignment="Center">
           <Path x:Name="Tick" Data="M 4,9 L 7,12 L 14,5" Stroke="{DynamicResource AccentInk}" StrokeThickness="2" Visibility="Collapsed"/>
         </Border>
         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
@@ -111,17 +111,33 @@
       <ControlTemplate.Triggers>
         <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="{DynamicResource Accent}"/><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Box" Property="BorderThickness" Value="2"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style TargetType="TextBox">
-    <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Soft}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="Padding" Value="8,6"/><Setter Property="CaretBrush" Value="{DynamicResource Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Panel}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="11,9"/><Setter Property="CaretBrush" Value="{DynamicResource Accent}"/><Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/><Setter Property="SelectionOpacity" Value="0.25"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
-      <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}"><ScrollViewer x:Name="PART_ContentHost"/></Border>
-      <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers>
+      <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9"><ScrollViewer x:Name="PART_ContentHost"/></Border>
+      <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="DatePicker"><Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Panel}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="Padding" Value="5"/></Style>
+  <Style TargetType="DatePicker">
+    <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Panel}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="MinHeight" Value="38"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="DatePicker">
+      <Grid x:Name="PART_Root">
+        <Border x:Name="DateFrame" CornerRadius="9" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"/>
+        <Grid Margin="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+          <p:DatePickerTextBox x:Name="PART_TextBox" Background="Transparent" BorderThickness="0" Foreground="{TemplateBinding Foreground}" Padding="10,8" VerticalContentAlignment="Center"/>
+          <Button x:Name="PART_Button" Grid.Column="1" Style="{StaticResource Quiet}" Padding="6" Margin="2" MinHeight="0" Focusable="False" ToolTip="选择日期" AutomationProperties.Name="打开日期日历"><TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets" FontSize="16"/></Button>
+        </Grid>
+        <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" Focusable="False"/>
+      </Grid>
+      <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="DateFrame" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="DateFrame" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="ComboBox">
     <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Panel}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="MaxDropDownHeight" Value="220"/>
@@ -134,12 +150,13 @@
         <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" IsHitTestVisible="False" Margin="11,5,25,5" VerticalAlignment="Center"/>
         <TextBlock Text="▾" Foreground="{DynamicResource Muted}" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0"/>
         <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
-          <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+          <Border Padding="4" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer>
           </Border>
         </Popup>
       </Grid>
       <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
         <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
         <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
       </ControlTemplate.Triggers>
@@ -148,14 +165,22 @@
   <Style TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Padding" Value="12,7"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
-      <Border x:Name="Frame" Padding="{TemplateBinding Padding}" Background="Transparent"><ContentPresenter/></Border>
+      <Border x:Name="Frame" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent"><ContentPresenter/></Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource Soft}"/></Trigger>
         <Trigger Property="IsSelected" Value="True"><Setter TargetName="Frame" Property="Background" Value="{DynamicResource Soft}"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="p:DatePickerTextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Padding" Value="7,6"/></Style>
+  <Style TargetType="p:DatePickerTextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Padding" Value="10,8"/></Style>
+  <Style x:Key="FormScroll" TargetType="ScrollViewer">
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollViewer">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}" Margin="0,0,6,0"/>
+        <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Style="{DynamicResource {x:Type ScrollBar}}" Orientation="Vertical" Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}" Value="{TemplateBinding VerticalOffset}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+      </Grid>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="Calendar"><Setter Property="Background" Value="{DynamicResource Panel}"/><Setter Property="Foreground" Value="{DynamicResource Text}"/></Style>
   <Style TargetType="p:CalendarDayButton" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Padding" Value="3"/><Setter Property="MinHeight" Value="27"/>
@@ -167,7 +192,7 @@
   </Style>
   <Style TargetType="p:CalendarButton" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Padding" Value="3"/><Setter Property="MinHeight" Value="27"/></Style>
   <Style TargetType="ScrollBar">
-    <Setter Property="Width" Value="8"/><Setter Property="Background" Value="Transparent"/><Setter Property="Margin" Value="4,0,0,0"/>
+    <Setter Property="Width" Value="8"/><Setter Property="MinWidth" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="Margin" Value="4,0,0,0"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
       <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
         <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Focusable="False" Opacity="0"/></Track.DecreaseRepeatButton>

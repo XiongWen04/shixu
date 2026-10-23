@@ -453,6 +453,32 @@ namespace DeskTodo
                 var nextDay = new DateTime(2026, 10, 12); Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith(nextDay.ToString("yyyy年M月d日") + "，")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
                 int beforeCancel = app.Store.State.Items.Count; openEditor(nextDay, false); Check(app.Store.State.Items.Count == beforeCancel, "cancelled dialog leaves tasks unchanged");
                 app.Main.SelectDay(new DateTime(2026, 10, 11)); app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "calendar-small.png"));
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); var form = new EditWindow(app, null, new DateTime(2026, 10, 23)) { Owner = app.Main }; form.Show(); Pump();
+                    try
+                    {
+                        Check(Controls<TextBlock>(form).Count(t => new[] { "日程安排", "任务属性", "补充信息" }.Contains(t.Text)) == 3, "editor has grouped sections " + theme);
+                        var date = Controls<DatePicker>(form).First(t => AutomationProperties.GetName(t) == "待办日期");
+                        var dateButton = (Button)date.Template.FindName("PART_Button", date); dateButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        var popup = (Popup)date.Template.FindName("PART_Popup", date);
+                        Check(date.IsDropDownOpen && popup.IsOpen && popup.Child is Calendar, "custom calendar button opens real date picker " + theme);
+                        ((Calendar)popup.Child).SelectedDate = new DateTime(2026, 10, 24); date.IsDropDownOpen = false; Pump();
+                        Check(date.SelectedDate == new DateTime(2026, 10, 24), "calendar selection updates date " + theme);
+                        var input = Controls<TextBox>(form).First(t => AutomationProperties.GetName(t) == "待办标题");
+                        Check(((Border)input.Template.FindName("Frame", input)).CornerRadius.TopLeft == 9, "rounded input style " + theme);
+                        var scroll = Controls<ScrollViewer>(form).First(t => t.Style == Application.Current.Resources["FormScroll"]);
+                        scroll.ScrollToEnd(); Pump(); var bar = (ScrollBar)scroll.Template.FindName("PART_VerticalScrollBar", scroll);
+                        Check(scroll.VerticalOffset > 0 && bar.ActualWidth == 8, "thin scrollbar reaches lower fields " + theme);
+                        Capture(form, Path.Combine(root, "editor-lower-" + theme + ".png"));
+                        scroll.ScrollToTop(); Controls<CheckBox>(form).First(t => AutomationProperties.GetName(t) == "综测活动").IsChecked = true; Pump();
+                        Capture(form, Path.Combine(root, "editor-" + theme + ".png"));
+                        form.Width = 500; form.Height = 600; Pump();
+                        Check(Controls<Button>(form).Single(b => (b.Content as string) == "保存待办").IsVisible && dateButton.IsVisible, "editor remains usable at minimum size " + theme);
+                        Capture(form, Path.Combine(root, "editor-small-" + theme + ".png"));
+                    }
+                    finally { form.Close(); }
+                }
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CALENDAR PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }

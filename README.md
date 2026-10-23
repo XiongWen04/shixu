@@ -10,7 +10,7 @@
 
 基于 C# / WPF / .NET Framework 4.8，Windows x64 原生运行，无第三方运行依赖。
 
-**当前版本：v2.6.1 · Windows x64**
+**当前版本：v2.6.2 · Windows x64**
 
 [下载便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
@@ -20,7 +20,7 @@
 
 推荐 Windows 11 64 位；Windows 10 64 位需已安装 .NET Framework 4.8。
 
-1. [下载 v2.6.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.6.1/Shixu-v2.6.1-win-x64-portable.zip)，解压到有写入权限的文件夹。
+1. [下载 v2.6.2 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.6.2/Shixu-v2.6.2-win-x64-portable.zip)，解压到有写入权限的文件夹。
 2. 运行 `拾序.exe`，保留旁边的 `拾序.exe.config`。
 3. 打开“月历”选择日期，点击右侧“添加待办”；也可以在“全部待办”右上角添加，或按 `Ctrl+N`。
 4. 需要学习时，打开“学习”，选择倒计时或正向计时，填写名称后开始。
@@ -89,6 +89,10 @@
 任务操作、换肤与小组件弹出菜单统一为圆角面板、舒适行距、图标和主题高亮；删除操作单独分组并以红色区分。支持深浅主题、选中标记和多级菜单。
 
 ![任务菜单示例](docs/screenshots/task-menu.png)
+
+编辑弹窗按日程安排、任务属性与补充信息分组，日期和时间并排展示；输入框、日期图标、勾选项和细滚动条统一适配三套基础主题。保存与取消始终位于底部，小窗口可滚动访问全部字段。
+
+![任务表单示例](docs/screenshots/task-editor.png)
 
 ### 记录综测加分
 
@@ -212,7 +216,7 @@ Get-Content -LiteralPath (Join-Path $uiRoot 'ui-report.txt')
 
 `layout`（界面布局与任务卡交互）、`credits`（综测加分）、`background` 和 `desktop` 为另外四个专项；省略第三个参数执行完整界面检查。GUI 命令返回不代表检查完成，需等待进程退出并读取报告。
 
-v2.6.1 构建通过，38 项布局/任务菜单检查及 45 项背景/换肤检查通过，覆盖三套基础主题、菜单选中态、多级遮罩菜单和原有任务操作。本次仅修改界面样式，未重跑核心、桌面与完整界面专项；多 DPI 未全面验证。
+v2.6.2 构建通过，37 项月历/表单、26 项综测和 38 项布局/菜单检查通过，覆盖三套主题、真实日期日历、日期选择、小窗口滚动、任务保存与综测联动。本次未修改数据逻辑，未重跑核心、背景、桌面和完整界面专项；多 DPI 未全面验证。
 
 </details>
 
@@ -237,6 +241,7 @@ v2.6.1 构建通过，38 项布局/任务菜单检查及 45 项背景/换肤检�
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v2.6.2](https://github.com/XiongWen04/shixu/releases/tag/v2.6.2) | 编辑表单分组与双列日期时间，统一圆角输入、日期按钮、勾选反馈和细滚动条 |
 | [v2.6.1](https://github.com/XiongWen04/shixu/releases/tag/v2.6.1) | 统一任务、换肤及小组件弹出菜单：圆角、图标、悬停反馈与删除操作分组 |
 | [v2.6.0](https://github.com/XiongWen04/shixu/releases/tag/v2.6.0) | 任务可勾选综测活动并填写分数，完成后自动入账、撤销同步撤回；数据格式升级为 v8 |
 | [v2.5.0](https://github.com/XiongWen04/shixu/releases/tag/v2.5.0) | 正式采用左侧导航、月历任务条、当天任务卡和综测记录表，改善小窗口展示 |
