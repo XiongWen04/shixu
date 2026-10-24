@@ -321,6 +321,88 @@ namespace DeskTodo
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
         }
+        public static void RunExpenses(AppController app, string root)
+        {
+            try
+            {
+                app.Main.SelectPage("记账"); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "这个月还没有支出记录"), "expense empty state");
+                Action<bool, bool> edit = (existing, save) =>
+                {
+                    Exception failure = null;
+                    app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        var editor = Application.Current.Windows.OfType<ExpenseWindow>().FirstOrDefault();
+                        try
+                        {
+                            Check(editor != null && editor.Owner == app.Main, "expense owned dialog");
+                            var amount = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）");
+                            var note = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "备注（可选）");
+                            var date = Controls<DatePicker>(editor).First(); var category = Controls<ComboBox>(editor).First();
+                            Check(existing ? amount.Text == "18.50" && note.Text == "示例：午饭" : date.SelectedDate == DateTime.Today && (string)category.SelectedItem == "其他", "expense default or edit values");
+                            var button = Controls<Button>(editor).First(b => (b.Content as string) == "保存支出");
+                            if (!save) { Controls<Button>(editor).First(b => (b.Content as string) == "取消").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
+                            foreach (var invalid in new[] { "", "abc", "0", "-1", "1.001", "1.00000000000000000000000000001", "100000000" })
+                            {
+                                amount.Text = invalid; button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "invalid expense input remains open: " + invalid);
+                            }
+                            amount.Text = existing ? "20.25" : "18.50"; category.SelectedItem = "餐饮"; note.Text = existing ? "示例：晚饭" : "示例：午饭";
+                            date.SelectedDate = null; button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "missing expense date rejected"); date.SelectedDate = DateTime.Today;
+                            Check(!Controls<TextBlock>(editor).Any(t => t.Text == "请选择有效的支出日期。"), "corrected expense clears validation hint");
+                            Capture(editor, Path.Combine(root, "expense-editor.png")); button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        }
+                        catch (Exception ex) { failure = ex; }
+                        finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                    }));
+                    if (existing) Controls<Button>(app.Main).First(b => (b.Content as string) == "修改").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    else Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 记一笔").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    if (failure != null) throw failure; app.Main.UpdateLayout();
+                };
+                edit(false, false); Check(app.Store.State.Expenses.Count == 0, "cancel leaves expenses unchanged");
+                edit(false, true); Check(app.Store.State.Expenses.Single().Amount == 18.50m, "expense dialog saves new record");
+                edit(true, true); Check(app.Store.State.Expenses.Single().Amount == 20.25m && app.Store.State.Expenses.Single().Note == "示例：晚饭", "expense dialog edits record");
+                Exception minimalError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<ExpenseWindow>().FirstOrDefault();
+                    try
+                    {
+                        Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）").Text = "1.00";
+                        Controls<Button>(editor).First(b => (b.Content as string) == "保存支出").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
+                    catch (Exception ex) { minimalError = ex; }
+                    finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                }));
+                app.EditExpense(null); if (minimalError != null) throw minimalError;
+                var minimal = app.Store.State.Expenses.Single(e => e.Amount == 1);
+                Check(minimal.Category == "其他" && minimal.Date == Dates.Key(DateTime.Today) && String.IsNullOrEmpty(minimal.Note), "amount alone saves with defaults"); app.DeleteExpense(minimal);
+                app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 6, Category = "交通", Date = Dates.Key(DateTime.Today), Note = "示例：地铁" }, false);
+                app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 35.80m, Category = "学习", Date = Dates.Key(DateTime.Today.AddDays(-1)), Note = "示例：资料打印" }, false);
+                app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 9.99m, Category = "其他", Date = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)), Note = "示例：上月支出" }, false);
+                app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "today total excludes other days");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 合计 ¥26.25"), "daily subtotal exact");
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单上个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "示例：上月支出"), "previous month displays history");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "本月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                string backup = Path.Combine(root, "expense-backup.json"); app.Store.Export(backup); app.Store.ChangeState(state => state.Expenses.Clear()); app.Import(backup);
+                Check(app.Store.State.Expenses.Count == 4, "controller import restores expenses");
+                foreach (var theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-" + theme + ".png"));
+                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "expenses render " + theme);
+                }
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-small.png"));
+                Check(Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).Count() == 6, "all six navigation entries at minimum size");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(app.Store.State.Expenses.Count == 3 && !app.Store.State.Expenses.Any(e => e.Note == "示例：地铁"), "delete selected expense");
+                string savedId = app.Store.State.Expenses[0].Id;
+                app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders");
+                Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Any(e => e.Id == savedId), "expense persists on disk");
+                File.WriteAllText(Path.Combine(root, "ui-report.txt"), "EXPENSES PASS: " + passed); app.Exit();
+            }
+            catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }
+        }
         public static void RunCredits(AppController app, string root)
         {
             try

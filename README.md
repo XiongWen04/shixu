@@ -4,13 +4,13 @@
 
 **面向大学生、研究生的 Windows 桌面日程与学习工具。** 用月历安排课程、组会和截止日期，用番茄钟或正向计时记录学习，再把参加过的活动与综测加分整理到同一个地方。
 
-支持 **待办清单、日历计划、番茄钟、学习时长统计、桌面小组件和综测加分记录**。数据保存在本机，无需登录，解压即可使用；提供风景皮肤和自定义背景。
+支持 **待办清单、日历计划、番茄钟、学习时长统计、桌面小组件、综测加分记录和逐笔记账**。数据保存在本机，无需登录，解压即可使用；提供风景皮肤和自定义背景。
 
-**Shixu is a portable Windows to-do list and study timer** with calendar planning, Pomodoro, study statistics, desktop widgets and student activity score tracking. Local data storage; no sign-in required.
+**Shixu is a portable Windows to-do list and study timer** with calendar planning, Pomodoro, study statistics, desktop widgets, student activity score tracking and expense tracking. Local data storage; no sign-in required.
 
 基于 C# / WPF / .NET Framework 4.8，Windows x64 原生运行，无第三方运行依赖。
 
-**当前版本：v2.6.2 · Windows x64**
+**当前版本：v2.7.0 · Windows x64**
 
 [下载便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
@@ -20,7 +20,7 @@
 
 推荐 Windows 11 64 位；Windows 10 64 位需已安装 .NET Framework 4.8。
 
-1. [下载 v2.6.2 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.6.2/Shixu-v2.6.2-win-x64-portable.zip)，解压到有写入权限的文件夹。
+1. [下载 v2.7.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.7.0/Shixu-v2.7.0-win-x64-portable.zip)，解压到有写入权限的文件夹。
 2. 运行 `拾序.exe`，保留旁边的 `拾序.exe.config`。
 3. 打开“月历”选择日期，点击右侧“添加待办”；也可以在“全部待办”右上角添加，或按 `Ctrl+N`。
 4. 需要学习时，打开“学习”，选择倒计时或正向计时，填写名称后开始。
@@ -31,6 +31,7 @@
 
 | 功能 | 可以做什么 |
 | --- | --- |
+| 逐笔记账 | 金额、日期、分类与可选备注，今日 / 本月支出、每日小计、按月查看，修改和删除 |
 | 综测加分 | 记录活动名称、活动日期和加分分数（支持小数），查看累计分数，修改或删除记录 |
 | 待办管理 | 新增、编辑、完成、删除与撤销最近一次删除；支持日期、时间、地点、备注、标签和重要标记 |
 | 日程视图 | “今天”查看当天及逾期事项；“全部”搜索、按标签筛选和折叠重复任务；“月历”按日安排 |
@@ -48,7 +49,7 @@
 
 ### 安排待办
 
-左侧导航切换今天、全部待办、月历、学习和综测加分；换肤、设置和小组件入口集中在导航底部。月历左侧显示整月大网格、月份概览与任务条，右侧以独立卡片展示所选日任务的时间、标题、地点和标签。卡片的“···”菜单提供编辑、重要标记、删除和停止后续重复；任务文字仍可双击编辑。小窗口与六周月份会压缩日格中的任务预览，并显示剩余数量，完整列表在右侧查看。点击“添加待办”打开完整弹窗，默认日期跟随所选日；可填写时间、地点、标签、备注、提醒和重复规则。
+左侧导航切换今天、全部待办、月历、学习、综测加分和记账；换肤、设置和小组件入口集中在导航底部。月历左侧显示整月大网格、月份概览与任务条，右侧以独立卡片展示所选日任务的时间、标题、地点和标签。卡片的“···”菜单提供编辑、重要标记、删除和停止后续重复；任务文字仍可双击编辑。小窗口与六周月份会压缩日格中的任务预览，并显示剩余数量，完整列表在右侧查看。点击“添加待办”打开完整弹窗，默认日期跟随所选日；可填写时间、地点、标签、备注、提醒和重复规则。
 
 “今天”集中查看当天和逾期事项，“全部”管理所有任务，支持搜索与标签组合筛选。已完成任务保留记录。
 
@@ -93,6 +94,18 @@
 编辑弹窗按日程安排、任务属性与补充信息分组，日期和时间并排展示；输入框、日期图标、勾选项和细滚动条统一适配三套基础主题。保存与取消始终位于底部，小窗口可滚动访问全部字段。
 
 ![任务表单示例](docs/screenshots/task-editor.png)
+
+### 随手记账
+
+点击左侧「记账」→「记一笔」，只填金额即可保存。日期默认今天，可补记历史支出；分类提供餐饮、交通、购物、学习、娱乐和其他，备注可选。支持修改和删除，按 `Ctrl+N` 可新增。
+
+页面顶部显示今日与本月实际支出，下方按日期分组展示所选月份的账单和每日小计。使用月份按钮回看历史，点击「本月」返回当前月份。金额使用人民币，单笔大于 0、最多两位小数、最高 99999999.99 元。账单与待办、学习独立，随现有本地备份、导入和数据迁移保存。
+
+![逐笔记账与每日支出汇总](docs/screenshots/expenses.png)
+
+<img src="docs/screenshots/expense-editor.png" alt="支出编辑弹窗" width="420">
+
+数据格式升级为 v9，兼容读取 v1–v8。v2.6.2 及更早版本不支持 v9；回退须使用升级前的备份。
 
 ### 记录综测加分
 
@@ -214,9 +227,9 @@ $run.WaitForExit()
 Get-Content -LiteralPath (Join-Path $uiRoot 'ui-report.txt')
 ```
 
-`layout`（界面布局与任务卡交互）、`credits`（综测加分）、`background` 和 `desktop` 为另外四个专项；省略第三个参数执行完整界面检查。GUI 命令返回不代表检查完成，需等待进程退出并读取报告。
+`expenses`（逐笔记账）、`layout`（界面布局与任务卡交互）、`credits`（综测加分）、`background` 和 `desktop` 为另外五个专项；省略第三个参数执行完整界面检查。GUI 命令返回不代表检查完成，需等待进程退出并读取报告。
 
-v2.6.2 构建通过，37 项月历/表单、26 项综测和 38 项布局/菜单检查通过，覆盖三套主题、真实日期日历、日期选择、小窗口滚动、任务保存与综测联动。本次未修改数据逻辑，未重跑核心、背景、桌面和完整界面专项；多 DPI 未全面验证。
+v2.7.0 构建通过，155 项核心与 40 项记账界面检查通过，覆盖金额校验、默认值、增改删、取消、按月查看、每日汇总、旧数据兼容、原子失败、备份恢复、迁移、三套主题和最小窗口。本次未重跑背景、桌面及完整界面专项，多 DPI 未全面验证。
 
 </details>
 
@@ -231,7 +244,7 @@ v2.6.2 构建通过，37 项月历/表单、26 项综测和 38 项布局/菜单�
 | `outputs/` | 本机发布附件，Git 忽略 |
 | `dist/`、`work/` | 构建产物与临时检查目录，Git 忽略 |
 
-`App.cs` 管应用生命周期、托盘、主题和提醒；`Core.cs` 管数据、持久化、重复规则和学习汇总；`MainWindow.cs`、`Ui.cs` 管页面与弹窗；`Focus.cs`、`StudyStats.cs` 管学习计时与统计；`WidgetWindow.cs`、`WidgetSurface.cs`、`NativeDesktop.cs` 管桌面小组件与系统接入。
+`App.cs` 管应用生命周期、托盘、主题和提醒；`Core.cs` 管数据、持久化、重复规则和学习汇总；`MainWindow.cs`、`Ui.cs` 管页面与弹窗；`Expenses.cs` 管记账弹窗；`Focus.cs`、`StudyStats.cs` 管学习计时与统计；`WidgetWindow.cs`、`WidgetSurface.cs`、`NativeDesktop.cs` 管桌面小组件与系统接入。
 
 新克隆的仓库不包含本机程序和个人数据，直接使用请下载 Release。便携包仅包含 `拾序.exe`、`拾序.exe.config` 和 `使用说明.md`，放在包内的 `拾序/` 目录中。不要将整个本机运行目录、个人数据、设置或背景上传到 GitHub。
 
@@ -241,6 +254,7 @@ v2.6.2 构建通过，37 项月历/表单、26 项综测和 38 项布局/菜单�
 
 | 版本 | 主要变化 |
 | --- | --- |
+| [v2.7.0](https://github.com/XiongWen04/shixu/releases/tag/v2.7.0) | 新增逐笔记账、分类备注、今日与本月支出、每日小计和历史月份；数据格式升级为 v9 |
 | [v2.6.2](https://github.com/XiongWen04/shixu/releases/tag/v2.6.2) | 编辑表单分组与双列日期时间，统一圆角输入、日期按钮、勾选反馈和细滚动条 |
 | [v2.6.1](https://github.com/XiongWen04/shixu/releases/tag/v2.6.1) | 统一任务、换肤及小组件弹出菜单：圆角、图标、悬停反馈与删除操作分组 |
 | [v2.6.0](https://github.com/XiongWen04/shixu/releases/tag/v2.6.0) | 任务可勾选综测活动并填写分数，完成后自动入账、撤销同步撤回；数据格式升级为 v8 |

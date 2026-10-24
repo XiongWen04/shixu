@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.6.2.0")]
+[assembly: AssemblyVersion("2.7.0.0")]
 
 namespace DeskTodo
 {
@@ -31,9 +31,10 @@ namespace DeskTodo
             bool backgroundTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "background";
             bool desktopTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "desktop";
             bool layoutTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "layout";
+            bool expensesTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "expenses";
             bool creditsTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "credits";
             bool calendarTest = args.Length == 3 && args[0] == "--ui-test" && args[2] == "calendar";
-            bool test = layoutTest || creditsTest || desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
+            bool test = expensesTest || layoutTest || creditsTest || desktopTest || backgroundTest || calendarTest || args.Length == 2 && args[0] == "--ui-test";
             string root = test ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             Directory.CreateDirectory(root);
             bool created;
@@ -49,7 +50,7 @@ namespace DeskTodo
                     application.DispatcherUnhandledException += (s, e) => { app.Error("操作未完成", e.Exception); e.Handled = true; };
                     application.SessionEnding += (s, e) => app.Exit();
                     app.Start();
-                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (layoutTest) UiSmoke.RunLayout(app, root); else if (creditsTest) UiSmoke.RunCredits(app, root); else if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
+                    if (test) application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => { if (expensesTest) UiSmoke.RunExpenses(app, root); else if (layoutTest) UiSmoke.RunLayout(app, root); else if (creditsTest) UiSmoke.RunCredits(app, root); else if (desktopTest) UiSmoke.RunDesktop(app, root); else if (backgroundTest) UiSmoke.RunBackground(app, root); else if (calendarTest) UiSmoke.RunCalendar(app, root); else UiSmoke.Run(app, root); }));
                     application.Run();
                     return Environment.ExitCode;
                 }
@@ -202,6 +203,29 @@ namespace DeskTodo
             catch (Exception ex) { if (TestMode) throw; Error("保存失败", ex); return false; }
         }
         public void ToggleImportant(string id) { Mutate(items => { var item = items.First(i => i.Id == id); item.Important = !item.Important; }); }
+        public void EditExpense(ExpenseRecord record)
+        {
+            new ExpenseWindow(this, record) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
+        }
+        public bool SaveExpense(ExpenseRecord record, bool existing)
+        {
+            try
+            {
+                Store.ChangeState(state =>
+                {
+                    if (existing) { int index = state.Expenses.FindIndex(e => e.Id == record.Id); if (index < 0) throw new InvalidOperationException("这笔支出已不存在。"); state.Expenses[index] = record.Copy(); }
+                    else state.Expenses.Add(record.Copy());
+                });
+                Refresh(); return true;
+            }
+            catch (Exception ex) { if (TestMode) throw; Error("支出保存失败", ex); return false; }
+        }
+        public void DeleteExpense(ExpenseRecord record)
+        {
+            if (!TestMode && MessageBox.Show("删除这笔支出：" + record.Category + " ¥" + record.Amount.ToString("0.00") + "？", "删除支出", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            try { Store.ChangeState(state => state.Expenses.RemoveAll(e => e.Id == record.Id)); Refresh(); }
+            catch (Exception ex) { if (TestMode) throw; Error("支出删除失败", ex); }
+        }
         public void EditCredit(CreditRecord record)
         {
             var editor = new CreditWindow(this, record) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner };
@@ -421,7 +445,7 @@ namespace DeskTodo
         }
         public void Import(string path)
         {
-            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Credits = imported.Credits; state.DailyGoalMinutes = imported.DailyGoalMinutes; state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
+            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Expenses = imported.Expenses; state.Credits = imported.Credits; state.DailyGoalMinutes = imported.DailyGoalMinutes; state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
             catch (Exception ex) { Error("导入失败", ex); }
         }
         public void Exit()

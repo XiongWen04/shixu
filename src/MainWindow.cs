@@ -28,6 +28,7 @@ namespace DeskTodo
         StudyPeriodPanel studyPeriod;
         string taskSearch = "", taskTag = "", agendaQuery = "";
         string page = "月历";
+        DateTime expenseMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         bool showCompleted = true, compactCalendar;
         DateTime selected = DateTime.Today;
         public DateTime Month { get; private set; }
@@ -41,7 +42,7 @@ namespace DeskTodo
 
             SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain, app.Exit); };
             Closing += (s, e) => { if (!app.Exiting) { e.Cancel = true; Hide(); } };
-            PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { if (page == "综测") app.EditCredit(null); else app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
+            PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { if (page == "记账") app.EditExpense(null); else if (page == "综测") app.EditCredit(null); else app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
             var host = new Grid { ClipToBounds = true }; Content = host; host.Children.Add(backdrop); backgroundShade.SetResourceReference(Border.BackgroundProperty, "Surface"); host.Children.Add(backgroundShade); var layout = new DockPanel(); host.Children.Add(layout); UpdateBackground(app.BackgroundImage, app.Settings.BackgroundShade);
             var sidebar = new DockPanel { Width = 140, Margin = new Thickness(8, 22, 8, 20) };
             var sidebarCard = Ui.Card(sidebar, new Thickness(0)); sidebarCard.Margin = new Thickness(14, 18, 0, 18); DockPanel.SetDock(sidebarCard, Dock.Left); layout.Children.Add(sidebarCard);
@@ -53,7 +54,7 @@ namespace DeskTodo
             var settings = Ui.Button("设置", () => { var w = new SettingsWindow(app) { Owner = this }; w.ShowDialog(); }, "Quiet"); settings.HorizontalContentAlignment = HorizontalAlignment.Left; bottom.Children.Add(settings);
             var localLabel = Ui.Text("本地保存 · 离线可用", 10, "Muted"); localLabel.Margin = new Thickness(13, 18, 0, 0); bottom.Children.Add(localLabel);
             var nav = new StackPanel { Margin = new Thickness(4, 0, 10, 0) }; sidebar.Children.Add(nav);
-            string[] keys = { "今天", "全部", "月历", "番茄钟", "综测" }, labels = { "今天", "全部待办", "月历", "学习", "综测加分" }, icons = { "\uE80F", "\uE8FD", "\uE787", "\uE916", "\uE9D9" };
+            string[] keys = { "今天", "全部", "月历", "番茄钟", "综测", "记账" }, labels = { "今天", "全部待办", "月历", "学习", "综测加分", "记账" }, icons = { "\uE80F", "\uE8FD", "\uE787", "\uE916", "\uE9D9", "\uE8C7" };
             for (int n = 0; n < keys.Length; n++)
             {
                 string key = keys[n]; var b = Ui.Button("", () => SelectPage(key), "Quiet"); var item = new StackPanel { Orientation = Orientation.Horizontal }; item.Children.Add(new TextBlock { Text = icons[n], FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 17, Width = 30, VerticalAlignment = VerticalAlignment.Center }); item.Children.Add(new TextBlock { Text = labels[n], FontSize = 14, VerticalAlignment = VerticalAlignment.Center }); b.Content = item; b.HorizontalContentAlignment = HorizontalAlignment.Left; b.Padding = new Thickness(14, 12, 10, 12); b.Margin = new Thickness(0, 0, 0, 7); navigation[key] = b; System.Windows.Automation.AutomationProperties.SetName(b, "导航 " + key); nav.Children.Add(b);
@@ -90,6 +91,7 @@ namespace DeskTodo
             header.Visibility = page == "月历" || page == "今天" || page == "番茄钟" ? Visibility.Collapsed : Visibility.Visible;
             if (page == "月历") { heading.Text = Month.ToString("yyyy年M月"); subtitle.Text = "选择日期查看事项"; }
             else if (page == "番茄钟") { heading.Text = "番茄钟"; subtitle.Text = "给这段时间一个名字，专心学完这一轮"; }
+            else if (page == "记账") { heading.Text = "记账"; subtitle.Text = "记下日常花销，慢慢看清生活"; }
             else if (page == "综测") { heading.Text = "综测加分"; subtitle.Text = "记录每次活动，积累每一份收获"; }
             else if (page == "学习统计") { heading.Text = "学习统计"; subtitle.Text = "看看时间去了哪里，也看看自己走了多远"; }
             else if (page == "学习报告") { heading.Text = "学习周报与月报"; subtitle.Text = "按自然周和自然月回顾实际学习时间"; }
@@ -97,20 +99,56 @@ namespace DeskTodo
             if (page == "学习统计") AddTool("返回番茄钟", () => SelectPage("番茄钟"));
             if (page == "学习统计") AddTool("周报 / 月报", () => SelectPage("学习报告"));
             if (page == "学习报告") { AddTool("学习统计", () => SelectPage("学习统计")); AddTool("返回番茄钟", () => SelectPage("番茄钟")); }
+            if (page == "记账") AddTool("＋ 记一笔", () => app.EditExpense(null));
             if (page == "综测") AddTool("＋ 添加加分", () => app.EditCredit(null));
             if (page == "全部") { var add = Ui.Button("＋ 添加", () => app.Edit(null, null), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
-            if (page == "综测") RenderCredits();
+            if (page == "记账") RenderExpenses();
+            else if (page == "综测") RenderCredits();
             else if (page == "学习报告") { if (studyPeriod == null) studyPeriod = new StudyPeriodPanel(app); body.Children.Add(studyPeriod); studyPeriod.Refresh(true); }
             else if (page == "学习统计") { if (studyStats == null) studyStats = new StudyStatsPanel(app); body.Children.Add(studyStats); studyStats.Refresh(true); }
             else if (page == "番茄钟") { if (focusPanel == null) focusPanel = new FocusPanel(app); body.Children.Add(focusPanel); focusPanel.Refresh(true); }
             else if (page == "月历") RenderCalendar(); else if (page == "今天") RenderAgenda(); else RenderList();
             int pending = app.Store.State.Items.Count(i => !i.Done);
-            status.Text = page == "综测" ? "综测记录保存在本机  ·  随数据备份导出" : page == "番茄钟" || page == "学习统计" || page == "学习报告" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
+            status.Text = page == "记账" ? "支出记录保存在本机  ·  随数据备份导出" : page == "综测" ? "综测记录保存在本机  ·  随数据备份导出" : page == "番茄钟" || page == "学习统计" || page == "学习报告" ? "学习记录保存在本机  ·  暂停时间不计入" : "本地已保存  ·  " + pending + " 件未完成" + (app.CanUndo ? "  ·  可撤销最近一次删除" : "");
         }
         void AddTool(string text, Action action, double width = 0)
         {
             var b = Ui.Button(text, action); b.Padding = new Thickness(10, 8, 10, 8); if (width > 0) b.Width = width; b.Margin = new Thickness(5, 0, 0, 0); tools.Children.Add(b);
+        }
+        void RenderExpenses()
+        {
+            var records = app.Store.State.Expenses;
+            string monthKey = expenseMonth.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+            var monthly = records.Where(e => e.Date.StartsWith(monthKey, StringComparison.Ordinal)).ToList();
+            var panel = new DockPanel(); body.Children.Add(Ui.Card(panel, new Thickness(26)));
+            var top = new StackPanel(); DockPanel.SetDock(top, Dock.Top); panel.Children.Add(top);
+            var summary = new Grid { Margin = new Thickness(0, 0, 0, 24) }; summary.ColumnDefinitions.Add(new ColumnDefinition()); summary.ColumnDefinitions.Add(new ColumnDefinition()); top.Children.Add(summary);
+            string currentMonth = DateTime.Today.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+            string[] labels = { "今日支出", "本月支出" };
+            decimal[] totals = { records.Where(e => e.Date == Dates.Key(DateTime.Today)).Sum(e => e.Amount), records.Where(e => e.Date.StartsWith(currentMonth, StringComparison.Ordinal)).Sum(e => e.Amount) };
+            for (int n = 0; n < labels.Length; n++) { var card = new StackPanel(); card.Children.Add(Ui.Text(labels[n], 12, "Muted")); var total = Ui.Text("¥" + totals[n].ToString("0.00"), 34, "Accent", true); total.Margin = new Thickness(0, 8, 0, 0); card.Children.Add(total); Grid.SetColumn(card, n); summary.Children.Add(card); }
+            var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
+            var controls = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(controls, Dock.Right); bar.Children.Add(controls);
+            var previous = Ui.Button("‹", () => { expenseMonth = expenseMonth.AddMonths(-1); Refresh(); }, "Quiet"); previous.ToolTip = "上个月"; System.Windows.Automation.AutomationProperties.SetName(previous, "账单上个月"); previous.IsEnabled = expenseMonth.Year > 1 || expenseMonth.Month > 1; controls.Children.Add(previous);
+            controls.Children.Add(Ui.Button("本月", () => { expenseMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1); Refresh(); }, "Quiet"));
+            var next = Ui.Button("›", () => { expenseMonth = expenseMonth.AddMonths(1); Refresh(); }, "Quiet"); next.ToolTip = "下个月"; System.Windows.Automation.AutomationProperties.SetName(next, "账单下个月"); next.IsEnabled = expenseMonth.Year < 9999 || expenseMonth.Month < 12; controls.Children.Add(next);
+            var caption = Ui.Text(expenseMonth.ToString("yyyy年M月") + " · " + monthly.Count + " 笔 · ¥" + monthly.Sum(e => e.Amount).ToString("0.00"), 17, "Text", true); caption.VerticalAlignment = VerticalAlignment.Center; bar.Children.Add(caption); top.Children.Add(bar);
+            var list = new StackPanel(); panel.Children.Add(Ui.Scroll(list));
+            if (monthly.Count == 0) Ui.Empty(list, "这个月还没有支出记录", "点击右上角“记一笔”，从一笔日常花销开始");
+            foreach (var day in monthly.AsEnumerable().Reverse().OrderByDescending(e => e.Date).GroupBy(e => e.Date))
+            {
+                var date = Ui.Text(day.Key + " · 合计 ¥" + day.Sum(e => e.Amount).ToString("0.00"), 13, "Muted", true); date.Margin = new Thickness(0, 14, 0, 8); list.Children.Add(date);
+                foreach (var record in day)
+                {
+                    var row = new Grid { Margin = new Thickness(0, 12, 0, 12) }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(126) });
+                    var category = Ui.Text(record.Category, 14, "Text", true); category.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(category);
+                    var note = Ui.Text(String.IsNullOrEmpty(record.Note) ? "日常支出" : record.Note, 13, "Muted"); note.VerticalAlignment = VerticalAlignment.Center; note.TextWrapping = TextWrapping.NoWrap; note.TextTrimming = TextTrimming.CharacterEllipsis; note.ToolTip = record.Note; note.Margin = new Thickness(0, 0, 12, 0); Grid.SetColumn(note, 1); row.Children.Add(note);
+                    var money = Ui.Text("¥" + record.Amount.ToString("0.00"), 19, "Accent", true); money.VerticalAlignment = VerticalAlignment.Center; money.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(money, 2); row.Children.Add(money);
+                    var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; actions.Children.Add(Ui.Button("修改", () => app.EditExpense(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteExpense(record), "Quiet")); Grid.SetColumn(actions, 3); row.Children.Add(actions);
+                    var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); list.Children.Add(line);
+                }
+            }
         }
         void RenderCredits()
         {
