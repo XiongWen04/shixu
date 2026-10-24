@@ -51,7 +51,7 @@ namespace DeskTodo
     [DataContract]
     public class TodoState
     {
-        [DataMember(IsRequired = true)] public int Version = 9;
+        [DataMember(IsRequired = true)] public int Version = 10;
         [DataMember] public List<ExpenseRecord> Expenses = new List<ExpenseRecord>();
         [DataMember] public List<CreditRecord> Credits = new List<CreditRecord>();
         [DataMember] public int DailyGoalMinutes;
@@ -63,7 +63,7 @@ namespace DeskTodo
         public TodoState Copy() { return new TodoState { Expenses = Expenses.Select(e => e.Copy()).ToList(), Credits = Credits.Select(c => c.Copy()).ToList(), DailyGoalMinutes = DailyGoalMinutes, Items = Items.Select(i => i.Copy()).ToList(), Series = Series.Select(s => s.Copy()).ToList(), FocusHistory = FocusHistory.Select(f => f.Copy()).ToList(), ActiveFocus = ActiveFocus == null ? null : ActiveFocus.Copy() }; }
         public void Validate()
         {
-            if (Version < 1 || Version > 9) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
+            if (Version < 1 || Version > 10) throw new InvalidDataException("不支持这个数据版本，请使用对应版本的软件。");
             if (Expenses == null || Expenses.Count > 10000) throw new InvalidDataException("记账记录无效或超过 10000 笔。");
             var expenseIds = new HashSet<string>();
             foreach (var expense in Expenses) { if (expense == null || !expenseIds.Add(expense.Id)) throw new InvalidDataException("记账记录重复或无效。"); expense.Validate(); }
@@ -108,11 +108,13 @@ namespace DeskTodo
     public class ExpenseRecord
     {
         public static readonly string[] Categories = { "餐饮", "交通", "购物", "学习", "娱乐", "其他" };
+        public static readonly string[] Meals = { "早饭", "午饭", "晚饭", "其他" };
         [DataMember(IsRequired = true)] public string Id;
         [DataMember(IsRequired = true)] public string Date;
         [DataMember(IsRequired = true)] public decimal Amount;
         [DataMember(IsRequired = true)] public string Category;
         [DataMember] public string Note;
+        [DataMember(EmitDefaultValue = false)] public string Meal;
         public ExpenseRecord Copy() { return (ExpenseRecord)MemberwiseClone(); }
         public void Validate()
         {
@@ -121,7 +123,35 @@ namespace DeskTodo
             if (!DateTime.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)) throw new InvalidDataException("请选择有效的支出日期。");
             if (Amount <= 0 || Amount > 99999999.99m || Decimal.Round(Amount, 2) != Amount) throw new InvalidDataException("金额应大于 0，最多两位小数，且不超过 99999999.99 元。");
             if (!Categories.Contains(Category)) throw new InvalidDataException("请选择有效的支出分类。");
+            if (Meal != null && (Category != "餐饮" || !Meals.Contains(Meal))) throw new InvalidDataException("餐饮类型应为早饭、午饭、晚饭或其他，且仅用于餐饮。");
             if (Note != null && Note.Length > 200) throw new InvalidDataException("记账备注最多 200 字。");
+        }
+    }
+
+    public class ExpenseSummary
+    {
+        public List<ExpenseRecord> Records;
+        public Dictionary<string, decimal> ByDay, ByCategory, ByMeal;
+        public decimal Total, DailyAverage;
+        public int AverageDays;
+        public static ExpenseSummary Create(IEnumerable<ExpenseRecord> records, DateTime month, DateTime today)
+        {
+            month = new DateTime(month.Year, month.Month, 1);
+            var result = new ExpenseSummary();
+            string key = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            result.Records = records.Where(e => e.Date.StartsWith(key, StringComparison.Ordinal)).ToList();
+            result.ByDay = Enumerable.Range(1, DateTime.DaysInMonth(month.Year, month.Month)).ToDictionary(d => Dates.Key(month.AddDays(d - 1)), d => 0m);
+            result.ByCategory = ExpenseRecord.Categories.ToDictionary(c => c, c => 0m);
+            result.ByMeal = ExpenseRecord.Meals.ToDictionary(m => m, m => 0m);
+            foreach (var record in result.Records)
+            {
+                result.ByDay[record.Date] += record.Amount; result.ByCategory[record.Category] += record.Amount;
+                if (record.Category == "餐饮") result.ByMeal[record.Meal ?? "其他"] += record.Amount;
+            }
+            result.Total = result.Records.Sum(e => e.Amount);
+            result.AverageDays = month.Year == today.Year && month.Month == today.Month ? today.Day : result.ByDay.Count;
+            result.DailyAverage = result.Total / result.AverageDays;
+            return result;
         }
     }
 
@@ -459,7 +489,7 @@ namespace DeskTodo
         void Commit(TodoState next)
         {
             if (lease == null) throw new ObjectDisposedException("DataStore");
-            next.Validate(); next.Version = 9; JsonFile.Write(FilePath, next); State = next;
+            next.Validate(); next.Version = 10; JsonFile.Write(FilePath, next); State = next;
         }
         public void Change(Action<List<TodoItem>> edit) { var next = State.Copy(); edit(next.Items); Commit(next); }
         public void ChangeState(Action<TodoState> edit) { var next = State.Copy(); edit(next); Commit(next); }

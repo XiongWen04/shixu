@@ -340,6 +340,7 @@ namespace DeskTodo
                             var note = Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "备注（可选）");
                             var date = Controls<DatePicker>(editor).First(); var category = Controls<ComboBox>(editor).First();
                             Check(existing ? amount.Text == "18.50" && note.Text == "示例：午饭" : date.SelectedDate == DateTime.Today && (string)category.SelectedItem == "其他", "expense default or edit values");
+                            if (existing) Check(Controls<Button>(editor).Any(b => AutomationProperties.GetName(b) == "餐饮类型 午饭" && AutomationProperties.GetHelpText(b) == "已选择"), "expense edit prefills meal subtype");
                             var button = Controls<Button>(editor).First(b => (b.Content as string) == "保存支出");
                             if (!save) { Controls<Button>(editor).First(b => (b.Content as string) == "取消").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
                             foreach (var invalid in new[] { "", "abc", "0", "-1", "1.001", "1.00000000000000000000000000001", "100000000" })
@@ -347,6 +348,7 @@ namespace DeskTodo
                                 amount.Text = invalid; button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "invalid expense input remains open: " + invalid);
                             }
                             amount.Text = existing ? "20.25" : "18.50"; category.SelectedItem = "餐饮"; note.Text = existing ? "示例：晚饭" : "示例：午饭";
+                            Controls<Button>(editor).First(b => AutomationProperties.GetName(b) == "餐饮类型 " + (existing ? "晚饭" : "午饭")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                             date.SelectedDate = null; button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "missing expense date rejected"); date.SelectedDate = DateTime.Today;
                             Check(!Controls<TextBlock>(editor).Any(t => t.Text == "请选择有效的支出日期。"), "corrected expense clears validation hint");
                             Capture(editor, Path.Combine(root, "expense-editor.png")); button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -360,7 +362,8 @@ namespace DeskTodo
                 };
                 edit(false, false); Check(app.Store.State.Expenses.Count == 0, "cancel leaves expenses unchanged");
                 edit(false, true); Check(app.Store.State.Expenses.Single().Amount == 18.50m, "expense dialog saves new record");
-                edit(true, true); Check(app.Store.State.Expenses.Single().Amount == 20.25m && app.Store.State.Expenses.Single().Note == "示例：晚饭", "expense dialog edits record");
+                Check(app.Store.State.Expenses.Single().Meal == "午饭", "food subtype saved");
+                edit(true, true); Check(app.Store.State.Expenses.Single().Amount == 20.25m && app.Store.State.Expenses.Single().Note == "示例：晚饭" && app.Store.State.Expenses.Single().Meal == "晚饭", "expense dialog edits amount and meal");
                 Exception minimalError = null;
                 app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
                 {
@@ -368,6 +371,9 @@ namespace DeskTodo
                     try
                     {
                         Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）").Text = "1.00";
+                        var category = Controls<ComboBox>(editor).First(); category.SelectedItem = "餐饮";
+                        Controls<Button>(editor).First(b => AutomationProperties.GetName(b) == "餐饮类型 早饭").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); category.SelectedItem = "其他"; editor.UpdateLayout();
+                        Check(!Controls<Button>(editor).First(b => AutomationProperties.GetName(b) == "餐饮类型 早饭").IsVisible, "nonfood category hides meal choices");
                         Controls<Button>(editor).First(b => (b.Content as string) == "保存支出").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     }
                     catch (Exception ex) { minimalError = ex; }
@@ -375,7 +381,7 @@ namespace DeskTodo
                 }));
                 app.EditExpense(null); if (minimalError != null) throw minimalError;
                 var minimal = app.Store.State.Expenses.Single(e => e.Amount == 1);
-                Check(minimal.Category == "其他" && minimal.Date == Dates.Key(DateTime.Today) && String.IsNullOrEmpty(minimal.Note), "amount alone saves with defaults"); app.DeleteExpense(minimal);
+                Check(minimal.Category == "其他" && minimal.Meal == null && minimal.Date == Dates.Key(DateTime.Today) && String.IsNullOrEmpty(minimal.Note), "amount alone saves defaults and clears nonfood meal"); app.DeleteExpense(minimal);
                 app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 6, Category = "交通", Date = Dates.Key(DateTime.Today), Note = "示例：地铁" }, false);
                 app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 35.80m, Category = "学习", Date = Dates.Key(DateTime.Today.AddDays(-1)), Note = "示例：资料打印" }, false);
                 app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 9.99m, Category = "其他", Date = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)), Note = "示例：上月支出" }, false);
@@ -383,19 +389,65 @@ namespace DeskTodo
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "today total excludes other days");
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 合计 ¥26.25"), "daily subtotal exact");
                 Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单上个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                string priorDate = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1));
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + priorDate).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "示例：上月支出"), "previous month displays history");
+                Exception selectedDateError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<ExpenseWindow>().FirstOrDefault();
+                    try { Check(Controls<DatePicker>(editor).First().SelectedDate == DateTime.ParseExact(priorDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), "new expense follows selected calendar date"); }
+                    catch (Exception ex) { selectedDateError = ex; }
+                    finally { if (editor != null) editor.Close(); }
+                }));
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 记一笔").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if (selectedDateError != null) throw selectedDateError;
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "本月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 string backup = Path.Combine(root, "expense-backup.json"); app.Store.Export(backup); app.Store.ChangeState(state => state.Expenses.Clear()); app.Import(backup);
                 Check(app.Store.State.Expenses.Count == 4, "controller import restores expenses");
+                Check(app.Store.State.Expenses.Any(r => r.Meal == "晚饭"), "controller import restores meal subtype");
+                var normalExpenses = app.Store.State.Expenses.Select(r => r.Copy()).ToList();
+                DateTime largeDay = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.Today.Day == 1 ? 2 : 1);
+                app.Store.ChangeState(state => state.Expenses = Enumerable.Range(0, 10000).Select(n => new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = Dates.Key(largeDay), Category = "餐饮", Amount = 99999999.99m }).ToList()); app.Refresh(); app.Main.UpdateLayout();
+                var largeCell = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + Dates.Key(largeDay));
+                var largeValue = Controls<TextBlock>(largeCell).Single(t => t.Text == "999999999900.00");
+                Check(largeValue.TextTrimming == TextTrimming.None, "maximum daily aggregate is never ellipsized");
+                var renderedBounds = largeValue.TransformToAncestor(largeCell).TransformBounds(new Rect(0, 0, largeValue.ActualWidth, largeValue.ActualHeight));
+                Check(renderedBounds.Left >= 0 && renderedBounds.Right <= largeCell.ActualWidth + .1, "maximum daily aggregate fits calendar cell");
+                app.Store.ChangeState(state => state.Expenses = normalExpenses); app.Refresh(); app.Main.UpdateLayout();
+                Check(Controls<ExpenseChart>(app.Main).Count() == 2, "trend and ring charts present");
+                Check(Controls<ExpenseChart>(app.Main).All(c => System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(c).GetName().Contains("元")), "charts expose exact values to accessibility tools");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "整月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<ExpenseChart>(app.Main).Any(c => AutomationProperties.GetName(c).StartsWith("每日支出趋势图") && AutomationProperties.GetName(c).Contains(Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month))))), "whole month trend includes last day");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "近 7 天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DateTime sixWeekMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                for (int n = 0; n < 12; n++)
+                {
+                    int calendarCells = (((((int)sixWeekMonth.DayOfWeek + 6) % 7) + DateTime.DaysInMonth(sixWeekMonth.Year, sixWeekMonth.Month) + 6) / 7) * 7;
+                    if (calendarCells == 42) break;
+                    Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单下个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); sixWeekMonth = sixWeekMonth.AddMonths(1); app.Main.UpdateLayout();
+                }
+                Check(Controls<UniformGrid>(app.Main).Any(g => AutomationProperties.GetName(g) == "支出月历" && g.Rows == 6 && g.Children.Count == 42), "six week expense calendar has complete rows");
+                Check(Controls<ExpenseChart>(app.Main).All(c => AutomationProperties.GetName(c).Contains("0.00元")), "empty month charts contain zero values");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "本月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                app.Store.ChangeState(state =>
+                {
+                    for (int n = 2; n < 10; n++) state.Expenses.Add(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = Dates.Key(DateTime.Today.AddDays(-n)), Amount = 16 + n * 2.5m, Category = "餐饮", Meal = ExpenseRecord.Meals[n % 4], Note = "示例：日常餐饮" });
+                    state.Expenses.Add(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = Dates.Key(DateTime.Today.AddDays(-4)), Amount = 79, Category = "购物", Note = "示例：生活用品" });
+                }); app.Refresh();
+                int beforeDelete = app.Store.State.Expenses.Count;
                 foreach (var theme in new[] { "warm", "light", "dark" })
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-" + theme + ".png"));
                     Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "expenses render " + theme);
+                    var expensePanel = Controls<ExpensePanel>(app.Main).First(); expensePanel.ScrollToEnd(); app.Main.UpdateLayout();
+                    var selectedButton = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + Dates.Key(DateTime.Today));
+                    Check(selectedButton.ActualWidth > 0 && selectedButton.ActualHeight > 0, "calendar usable " + theme); Capture(app.Main, Path.Combine(root, "expense-calendar-" + theme + ".png")); expensePanel.ScrollToTop();
                 }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-small.png"));
                 Check(Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).Count() == 6, "all six navigation entries at minimum size");
+                var smallPanel = Controls<ExpensePanel>(app.Main).First(); smallPanel.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expense-calendar-small.png")); Check(smallPanel.ScrollableHeight > 0, "minimum window scrolls to calendar and details");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(app.Store.State.Expenses.Count == 3 && !app.Store.State.Expenses.Any(e => e.Note == "示例：地铁"), "delete selected expense");
+                Check(app.Store.State.Expenses.Count == beforeDelete - 1 && !app.Store.State.Expenses.Any(e => e.Note == "示例：地铁"), "delete selected expense");
                 string savedId = app.Store.State.Expenses[0].Id;
                 app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders");
                 Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Any(e => e.Id == savedId), "expense persists on disk");

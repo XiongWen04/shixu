@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.7.0.0")]
+[assembly: AssemblyVersion("2.8.0.0")]
 
 namespace DeskTodo
 {
@@ -203,9 +203,9 @@ namespace DeskTodo
             catch (Exception ex) { if (TestMode) throw; Error("保存失败", ex); return false; }
         }
         public void ToggleImportant(string id) { Mutate(items => { var item = items.First(i => i.Id == id); item.Important = !item.Important; }); }
-        public void EditExpense(ExpenseRecord record)
+        public void EditExpense(ExpenseRecord record, DateTime? initialDate = null)
         {
-            new ExpenseWindow(this, record) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
+            new ExpenseWindow(this, record, initialDate) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
         }
         public bool SaveExpense(ExpenseRecord record, bool existing)
         {
