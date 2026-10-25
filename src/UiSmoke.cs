@@ -475,6 +475,10 @@ namespace DeskTodo
                 app.Store.ChangeState(state => state.Items.Clear());
                 app.Main.SelectPage("综测"); app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "还没有综测加分记录"), "credits empty state");
+                Check(Controls<Button>(app.Main).Any(b => (b.Content as string) == "全部记录"), "credits provide all records entry");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "全部记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "全部加分记录") && Controls<TextBlock>(app.Main).Any(t => t.Text == "还没有综测加分记录"), "all credit records has empty state");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "返回月历").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Action<bool, bool> edit = (existing, save) =>
                 {
                     Exception failure = null;
@@ -599,6 +603,34 @@ namespace DeskTodo
                 }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); var smallCredits = Controls<CreditPanel>(app.Main).First(); smallCredits.ScrollToTop(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-small.png")); smallCredits.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-calendar-small.png"));
                 Check(smallCredits.ScrollableHeight > 0 && Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).All(b => b.ActualWidth > 0), "small credit dashboard scrolls with navigation intact");
+                DateTime calendarSelection = app.Main.CreditDate; app.Main.Width = 1280; app.Main.Height = 820;
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "全部记录").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Func<List<Grid>> allCreditRows = () => Controls<Grid>(app.Main).Where(g => AutomationProperties.GetName(g).StartsWith("综测记录 ")).ToList();
+                Check(allCreditRows().Count == app.Store.State.Credits.Count && Controls<TextBlock>(app.Main).Any(t => t.Text == "示例：上月学术讲座"), "all records includes every month without selecting dates");
+                var expectedCreditOrder = app.Store.State.Credits.AsEnumerable().Reverse().OrderByDescending(c => c.Date).Select(c => "综测记录 " + c.Id).ToArray();
+                Check(allCreditRows().Select(g => AutomationProperties.GetName(g)).SequenceEqual(expectedCreditOrder), "all records sorted by descending activity date");
+                Check(app.Main.CreditDate == DateTime.Today, "all records new credit defaults to today");
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.UpdateLayout(); var panel = Controls<CreditPanel>(app.Main).First(); panel.ScrollToVerticalOffset(160); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-all-" + theme + ".png"));
+                    Check(allCreditRows().Count == expectedCreditOrder.Length, "all records remains complete " + theme);
+                }
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-all-small.png"));
+                Check(allCreditRows().All(g => g.ActualWidth > 0), "all records rows fit minimum window");
+                var firstRecord = app.Store.State.Credits.Single(c => "综测记录 " + c.Id == expectedCreditOrder[0]); Exception allEditError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<CreditWindow>().FirstOrDefault();
+                    try { Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "活动名称").Text = "示例：全部记录中修改"; Controls<Button>(editor).First(b => (b.Content as string) == "保存加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+                    catch (Exception ex) { allEditError = ex; } finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                }));
+                Controls<Button>(allCreditRows()[0]).First(b => (b.Content as string) == "修改").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if (allEditError != null) throw allEditError; app.Main.UpdateLayout();
+                Check(app.Store.State.Credits.Single(c => c.Id == firstRecord.Id).Title == "示例：全部记录中修改" && Controls<TextBlock>(app.Main).Any(t => t.Text == "全部加分记录"), "all records edit saves and retains list view");
+                int beforeAllDelete = app.Store.State.Credits.Count; var oldRecord = app.Store.State.Credits.Single(c => c.Title == "示例：上月学术讲座");
+                Controls<Button>(allCreditRows().Single(g => AutomationProperties.GetName(g) == "综测记录 " + oldRecord.Id)).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(app.Store.State.Credits.Count == beforeAllDelete - 1 && !app.Store.State.Credits.Any(c => c.Id == oldRecord.Id) && allCreditRows().Count == beforeAllDelete - 1, "delete historical credit refreshes all records");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "返回月历").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(app.Main.CreditDate == calendarSelection && Controls<UniformGrid>(app.Main).Any(g => AutomationProperties.GetName(g) == "综测活动月历"), "return to calendar preserves selected date");
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CREDITS PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }

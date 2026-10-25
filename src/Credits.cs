@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -16,6 +17,7 @@ namespace DeskTodo
         readonly StackPanel root = new StackPanel();
         DateTime month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
         public DateTime SelectedDate { get; private set; }
+        public bool ShowingAllRecords { get; private set; }
         bool compact;
         public CreditPanel(AppController controller)
         {
@@ -41,6 +43,27 @@ namespace DeskTodo
         {
             month = new DateTime(date.Year, date.Month, 1); SelectedDate = month.Year == DateTime.Today.Year && month.Month == DateTime.Today.Month ? DateTime.Today : month; Refresh();
         }
+        public void ToggleRecords() { ShowingAllRecords = !ShowingAllRecords; app.Refresh(); ScrollToTop(); }
+        void RenderAllRecords()
+        {
+            var records = app.Store.State.Credits.AsEnumerable().Reverse().OrderByDescending(c => c.Date).ToList();
+            var panel = new StackPanel(); panel.Children.Add(Ui.Text("全部加分记录", 18, "Text", true)); panel.Children.Add(Hint(records.Count + " 项活动 · 合计 " + Format(records.Sum(c => c.Points)) + " 分 · 按活动日期倒序"));
+            if (records.Count == 0) Ui.Empty(panel, "还没有综测加分记录", "点击“添加加分”，记录参加过的活动");
+            var titles = new Grid { Margin = new Thickness(0, 18, 0, 6) }; titles.ColumnDefinitions.Add(new ColumnDefinition()); foreach (double width in new[] { 105d, 125d, 95d, 126d }) titles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+            string[] labels = { "活动名称", "活动日期", "加分来源", "加分", "操作" }; for (int n = 0; n < labels.Length; n++) { var text = Hint(labels[n]); Grid.SetColumn(text, n); titles.Children.Add(text); } panel.Children.Add(titles);
+            var taskIds = new HashSet<string>(app.Store.State.Items.Select(i => i.Id));
+            foreach (var record in records)
+            {
+                var row = new Grid { Margin = new Thickness(0, 12, 0, 12) }; foreach (var column in titles.ColumnDefinitions) row.ColumnDefinitions.Add(new ColumnDefinition { Width = column.Width }); AutomationProperties.SetName(row, "综测记录 " + record.Id);
+                var title = Ui.Text(record.Title, 14, "Text", true); title.Margin = new Thickness(0, 0, 12, 0); title.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(title);
+                var date = Hint(record.Date); date.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(date, 1); row.Children.Add(date);
+                var source = Hint(record.SourceTaskId == null ? "手动添加" : taskIds.Contains(record.SourceTaskId) ? "任务完成自动加分" : "任务历史加分"); source.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(source, 2); row.Children.Add(source);
+                var points = Number("+" + Format(record.Points), 18, 28); points.Margin = new Thickness(0, 0, 8, 0); Grid.SetColumn(points, 3); row.Children.Add(points);
+                var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; actions.Children.Add(Ui.Button("修改", () => app.EditCredit(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteCredit(record), "Quiet")); Grid.SetColumn(actions, 4); row.Children.Add(actions);
+                var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); panel.Children.Add(line);
+            }
+            root.Children.Add(Card(panel));
+        }
         public void Refresh()
         {
             root.Children.Clear(); var summary = CreditSummary.Create(app.Store.State.Credits, month);
@@ -62,6 +85,7 @@ namespace DeskTodo
             }
             var explanation = Hint("已关联的来源任务撤销完成时，对应加分同步撤回。"); explanation.Margin = new Thickness(0, 12, 0, 0); sources.Children.Add(explanation);
             var summaryGrid = Columns(accumulation, sources); accumulation.Margin = compact ? new Thickness(0, 0, 0, 20) : new Thickness(0, 0, 26, 0); root.Children.Add(Card(summaryGrid));
+            if (ShowingAllRecords) { RenderAllRecords(); return; }
             var calendar = new StackPanel(); var top = new DockPanel(); var controls = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(controls, Dock.Right); top.Children.Add(controls);
             var previous = Ui.Button("‹", () => ChangeMonth(month.AddMonths(-1)), "Quiet"); previous.IsEnabled = month.Year > 1 || month.Month > 1; previous.ToolTip = "上个月"; AutomationProperties.SetName(previous, "综测上个月"); controls.Children.Add(previous);
             controls.Children.Add(Ui.Button("本月", () => ChangeMonth(DateTime.Today), "Quiet")); var next = Ui.Button("›", () => ChangeMonth(month.AddMonths(1)), "Quiet"); next.IsEnabled = month.Year < 9999 || month.Month < 12; next.ToolTip = "下个月"; AutomationProperties.SetName(next, "综测下个月"); controls.Children.Add(next);

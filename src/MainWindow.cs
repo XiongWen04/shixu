@@ -30,7 +30,7 @@ namespace DeskTodo
         string page = "月历";
         ExpensePanel expensePanel;
         CreditPanel creditPanel;
-        public DateTime CreditDate { get { return creditPanel == null ? DateTime.Today : creditPanel.SelectedDate; } }
+        public DateTime CreditDate { get { return creditPanel == null || creditPanel.ShowingAllRecords ? DateTime.Today : creditPanel.SelectedDate; } }
         public DateTime ExpenseDate { get { return expensePanel == null ? DateTime.Today : expensePanel.SelectedDate; } }
         bool showCompleted = true, compactCalendar;
         DateTime selected = DateTime.Today;
@@ -103,7 +103,7 @@ namespace DeskTodo
             if (page == "学习统计") AddTool("周报 / 月报", () => SelectPage("学习报告"));
             if (page == "学习报告") { AddTool("学习统计", () => SelectPage("学习统计")); AddTool("返回番茄钟", () => SelectPage("番茄钟")); }
             if (page == "记账") AddTool("＋ 记一笔", () => app.EditExpense(null, ExpenseDate));
-            if (page == "综测") AddTool("＋ 添加加分", () => app.EditCredit(null, CreditDate));
+            if (page == "综测") { AddTool(creditPanel != null && creditPanel.ShowingAllRecords ? "返回月历" : "全部记录", () => { if (creditPanel == null) creditPanel = new CreditPanel(app); creditPanel.ToggleRecords(); }); AddTool("＋ 添加加分", () => app.EditCredit(null, CreditDate)); }
             if (page == "全部") { var add = Ui.Button("＋ 添加", () => app.Edit(null, null), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
             if (page == "记账") RenderExpenses();
