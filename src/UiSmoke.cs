@@ -459,6 +459,20 @@ namespace DeskTodo
         {
             try
             {
+                var linkedTask = new TodoItem { Id = Guid.NewGuid().ToString("N"), Title = "示例：关联加分", Date = Dates.Key(DateTime.Today), CreditPoints = .5m, Done = true, CreatedUtc = DateTime.UtcNow.ToString("o") };
+                app.Store.ChangeState(state => { state.Items.Add(linkedTask); TaskCredits.Sync(state, linkedTask, DateTime.Today); });
+                Exception linkedError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<CreditWindow>().FirstOrDefault();
+                    try { Controls<Button>(editor).First(b => (b.Content as string) == "保存加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+                    catch (Exception ex) { linkedError = ex; }
+                    finally { if (editor != null && editor.IsVisible) editor.Close(); }
+                }));
+                app.EditCredit(app.Store.State.Credits.Single()); if (linkedError != null) throw linkedError;
+                Check(app.Store.State.Credits.Single().SourceTaskId == linkedTask.Id, "editing linked credit preserves task association");
+                app.Toggle(linkedTask.Id, false); Check(app.Store.State.Credits.Count == 0, "undo task completion retracts edited linked credit");
+                app.Store.ChangeState(state => state.Items.Clear());
                 app.Main.SelectPage("综测"); app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "还没有综测加分记录"), "credits empty state");
                 Action<bool, bool> edit = (existing, save) =>
@@ -493,6 +507,7 @@ namespace DeskTodo
                     else Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     if (failure != null) throw failure;
                     app.Main.UpdateLayout();
+                    if (save) { Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测日期 2026-10-22").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout(); }
                 };
                 edit(false, false); Check(app.Store.State.Credits.Count == 0, "cancel preserves records");
                 edit(false, true); Check(app.Store.State.Credits.Single().Points == 0.5m && app.Store.State.Credits[0].Date == "2026-10-22", "dialog adds credit");
@@ -501,7 +516,7 @@ namespace DeskTodo
                 foreach (string theme in new[] { "warm", "light", "dark" })
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout();
-                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1.75 分") && Controls<TextBlock>(app.Main).Any(t => t.Text == "2 项活动"), "credits total " + theme);
+                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "1.75 分") && Controls<TextBlock>(app.Main).Any(t => t.Text.StartsWith("2 项活动，")), "credits total " + theme);
                     Capture(app.Main, Path.Combine(root, "credits-" + theme + ".png"));
                 }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-small.png"));
@@ -537,6 +552,53 @@ namespace DeskTodo
                 app.Toggle(task.Id, true); task = app.Store.State.Items.Single(i => i.Id == task.Id).Copy(); task.CreditPoints = 1.5m;
                 app.SaveTodo(task, task, null); Check(app.Store.State.Credits.Single(c => c.SourceTaskId == task.Id).Points == 1.5m, "completed task edit updates credit");
                 app.Main.SelectPage("综测"); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "task-credit-result.png"));
+                app.Main.Width = 1280; app.Main.Height = 820;
+                app.Store.ChangeState(state =>
+                {
+                    state.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "示例：上月学术讲座", Date = "2026-09-20", Points = .75m });
+                    state.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "示例：研究生学术交流", Date = "2026-10-23", Points = .5m });
+                    for (int n = 0; n < 5; n++) state.Credits.Add(new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "示例：校园活动 " + (n + 1), Date = "2026-10-" + (4 + n * 3).ToString("D2"), Points = n % 2 == 0 ? .5m : 1.25m, SourceTaskId = n == 1 ? Guid.NewGuid().ToString("N") : null });
+                }); app.Refresh(); app.Main.UpdateLayout();
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测日期 2026-10-23").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "2 项活动 · 合计 2 分"), "selected credit date shows both records and exact subtotal");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "任务完成自动加分") && Controls<TextBlock>(app.Main).Any(t => t.Text == "手动添加"), "manual and linked activity sources visible");
+                var calendarCell = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测日期 2026-10-23");
+                Check(Controls<TextBlock>(calendarCell).Any(t => t.Text == "+2"), "credit calendar shows daily sum");
+                Exception chosenError = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<CreditWindow>().FirstOrDefault();
+                    try { Check(Controls<DatePicker>(editor).First().SelectedDate == new DateTime(2026, 10, 23), "new credit date follows selected calendar day"); }
+                    catch (Exception ex) { chosenError = ex; } finally { if (editor != null) editor.Close(); }
+                }));
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "＋ 添加加分").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if (chosenError != null) throw chosenError;
+                var septemberBar = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b).StartsWith("综测月份 2026-09，")); septemberBar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<Button>(app.Main).Any(b => AutomationProperties.GetName(b) == "综测日期 2026-09-20"), "monthly chart click changes calendar month");
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测日期 2026-09-20").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "示例：上月学术讲座"), "previous month activity can be read");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "本月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DateTime creditGridMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                for (int n = 0; n < 12; n++)
+                {
+                    if (((((int)creditGridMonth.DayOfWeek + 6) % 7) + DateTime.DaysInMonth(creditGridMonth.Year, creditGridMonth.Month) + 6) / 7 == 6) break;
+                    Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测下个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); creditGridMonth = creditGridMonth.AddMonths(1); app.Main.UpdateLayout();
+                }
+                Check(Controls<UniformGrid>(app.Main).Any(g => AutomationProperties.GetName(g) == "综测活动月历" && g.Rows == 6 && g.Children.Count == 42), "credit calendar supports six week month");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "这一天还没有加分记录"), "empty credit day is explicit");
+                Controls<Button>(app.Main).First(b => (b.Content as string) == "本月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "综测日期 2026-10-23").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                string creditBackup = Path.Combine(root, "credit-dashboard-backup.json"); app.Store.Export(creditBackup); var summaryBeforeImport = CreditSummary.Create(app.Store.State.Credits, new DateTime(2026, 10, 1)); app.Store.ChangeState(state => state.Credits.Clear()); app.Import(creditBackup);
+                Check(CreditSummary.Create(app.Store.State.Credits, new DateTime(2026, 10, 1)).Total == summaryBeforeImport.Total && app.Store.State.Credits.Any(c => c.SourceTaskId == task.Id), "dashboard backup import preserves scores and links");
+                foreach (string theme in new[] { "warm", "light", "dark" })
+                {
+                    app.ChangeTheme(theme); app.Main.UpdateLayout(); var panel = Controls<CreditPanel>(app.Main).First(); panel.ScrollToTop(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-" + theme + ".png"));
+                    Check(Controls<TextBlock>(app.Main).Any(t => t.Text == CreditPanel.Format(summaryBeforeImport.Total) + " 分"), "dashboard cumulative score " + theme);
+                    panel.ScrollToVerticalOffset(180); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-calendar-" + theme + ".png"));
+                    panel.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-monthly-" + theme + ".png"));
+                    Check(Controls<Button>(app.Main).Count(b => AutomationProperties.GetName(b).StartsWith("综测月份 ")) == 6, "six accessible monthly chart bars " + theme);
+                }
+                app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); var smallCredits = Controls<CreditPanel>(app.Main).First(); smallCredits.ScrollToTop(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credits-small.png")); smallCredits.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "credit-calendar-small.png"));
+                Check(smallCredits.ScrollableHeight > 0 && Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).All(b => b.ActualWidth > 0), "small credit dashboard scrolls with navigation intact");
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "CREDITS PASS: " + passed); app.Exit();
             }
             catch (Exception ex) { File.WriteAllText(Path.Combine(root, "ui-report.txt"), ex.ToString()); app.Exit(); Environment.ExitCode = 1; }

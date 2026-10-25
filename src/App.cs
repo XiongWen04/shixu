@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.8.0.0")]
+[assembly: AssemblyVersion("2.9.0.0")]
 
 namespace DeskTodo
 {
@@ -226,9 +226,9 @@ namespace DeskTodo
             try { Store.ChangeState(state => state.Expenses.RemoveAll(e => e.Id == record.Id)); Refresh(); }
             catch (Exception ex) { if (TestMode) throw; Error("支出删除失败", ex); }
         }
-        public void EditCredit(CreditRecord record)
+        public void EditCredit(CreditRecord record, DateTime? initialDate = null)
         {
-            var editor = new CreditWindow(this, record) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            var editor = new CreditWindow(this, record, initialDate) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner };
             editor.ShowDialog();
         }
         public bool SaveCredit(CreditRecord record, bool existing)

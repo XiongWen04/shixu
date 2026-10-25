@@ -8,7 +8,7 @@ $target = Join-Path $appDirectory '拾序.exe'
 $references = @('System.dll', 'System.Core.dll', 'System.Xaml.dll', 'System.Runtime.Serialization.dll', 'System.Windows.Forms.dll', 'System.Drawing.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
 $references += @('PresentationFramework.dll', 'PresentationCore.dll', 'WindowsBase.dll') | ForEach-Object { '/reference:' + (Join-Path $framework ('WPF\' + $_)) }
 $skinResources = @('mountain', 'sunlit') | ForEach-Object { '/resource:' + (Join-Path $PSScriptRoot ('Skins\' + $_ + '.png')) + ',Skins.' + $_ + '.png' }
-$files = @('Core.cs', 'Expenses.cs', 'App.cs', 'Ui.cs', 'MainWindow.cs', 'WidgetWindow.cs', 'WidgetSurface.cs', 'NativeDesktop.cs', 'Focus.cs', 'StudyStats.cs', 'UiSmoke.cs') | ForEach-Object { Join-Path $PSScriptRoot $_ }
+$files = @('Core.cs', 'Credits.cs', 'Expenses.cs', 'App.cs', 'Ui.cs', 'MainWindow.cs', 'WidgetWindow.cs', 'WidgetSurface.cs', 'NativeDesktop.cs', 'Focus.cs', 'StudyStats.cs', 'UiSmoke.cs') | ForEach-Object { Join-Path $PSScriptRoot $_ }
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /utf8output ('/out:' + $target) ('/win32manifest:' + (Join-Path $PSScriptRoot 'app.manifest')) ('/win32icon:' + (Join-Path $PSScriptRoot 'App.ico')) ('/resource:' + (Join-Path $PSScriptRoot 'Styles.xaml') + ',Styles.xaml') ('/resource:' + (Join-Path $PSScriptRoot 'App.ico') + ',App.ico') $skinResources $references $files
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'app.config') -Destination ($target + '.config') -Force

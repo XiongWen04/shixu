@@ -175,6 +175,29 @@ namespace DeskTodo
         }
     }
 
+    public class CreditSummary
+    {
+        public decimal Total, LinkedTotal, ManualTotal, MonthTotal;
+        public int Count, LinkedCount;
+        public List<CreditRecord> Records;
+        public Dictionary<string, decimal> ByDay, ByMonth;
+        public static CreditSummary Create(IEnumerable<CreditRecord> records, DateTime month)
+        {
+            month = new DateTime(month.Year, month.Month, 1); var all = records.ToList(); var result = new CreditSummary();
+            string key = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            result.Records = all.Where(c => c.Date.StartsWith(key, StringComparison.Ordinal)).ToList();
+            result.Total = all.Sum(c => c.Points); result.Count = all.Count;
+            var linked = all.Where(c => c.SourceTaskId != null).ToList(); result.LinkedCount = linked.Count; result.LinkedTotal = linked.Sum(c => c.Points); result.ManualTotal = all.Where(c => c.SourceTaskId == null).Sum(c => c.Points);
+            result.MonthTotal = result.Records.Sum(c => c.Points);
+            result.ByDay = Enumerable.Range(1, DateTime.DaysInMonth(month.Year, month.Month)).ToDictionary(day => Dates.Key(month.AddDays(day - 1)), day => 0m);
+            foreach (var record in result.Records) result.ByDay[record.Date] += record.Points;
+            int prior = Math.Min(5, (month.Year - 1) * 12 + month.Month - 1);
+            result.ByMonth = Enumerable.Range(0, prior + 1).Select(n => month.AddMonths(n - prior).ToString("yyyy-MM", CultureInfo.InvariantCulture)).ToDictionary(m => m, m => 0m);
+            foreach (var record in all) { string recordMonth = record.Date.Substring(0, 7); if (result.ByMonth.ContainsKey(recordMonth)) result.ByMonth[recordMonth] += record.Points; }
+            return result;
+        }
+    }
+
     public static class TaskCredits
     {
         public static void Sync(TodoState state, TodoItem item, DateTime today)

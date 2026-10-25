@@ -18,6 +18,28 @@ class CoreTests
         {
             Check(typeof(TodoState).GetField("Expenses") != null, "state exposes independent expense records");
             Check(typeof(ExpenseRecord).GetField("Meal") != null, "expenses support meal subtype");
+            Check(typeof(CreditRecord).Assembly.GetType("DeskTodo.CreditSummary") != null, "credits expose calendar and accumulation summary");
+            var scoreRecords = new List<CreditRecord> {
+                new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "讲座", Date = "2024-02-01", Points = .1m, SourceTaskId = Guid.NewGuid().ToString("N") },
+                new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "志愿服务", Date = "2024-02-01", Points = .2m },
+                new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "论坛", Date = "2024-02-29", Points = 1.25m, SourceTaskId = Guid.NewGuid().ToString("N") },
+                new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "上月活动", Date = "2024-01-01", Points = .5m },
+                new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "下月活动", Date = "2024-03-05", Points = .75m }
+            };
+            var scoreSummary = CreditSummary.Create(scoreRecords, new DateTime(2024, 2, 29));
+            Check(scoreSummary.Total == 2.8m && scoreSummary.Count == 5 && scoreSummary.MonthTotal == 1.55m, "credit accumulation and month totals exact");
+            Check(scoreSummary.LinkedTotal == 1.35m && scoreSummary.ManualTotal == 1.45m && scoreSummary.LinkedCount == 2, "credit sources include historical linked records");
+            var mixedScores = new[] { new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "任务加分", Date = "2024-02-01", Points = 10000m, SourceTaskId = Guid.NewGuid().ToString("N") }, new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "手动加分", Date = "2024-02-01", Points = .0000000000000000000000000001m } };
+            Check(CreditSummary.Create(mixedScores, new DateTime(2024, 2, 1)).ManualTotal == mixedScores[1].Points, "manual credit source keeps tiny decimal alongside large task credit");
+            Check(scoreSummary.ByDay.Count == 29 && scoreSummary.ByDay["2024-02-01"] == .3m && scoreSummary.ByDay["2024-02-02"] == 0, "leap credit month includes precise daily totals and empty days");
+            Check(scoreSummary.ByMonth.Count == 6 && scoreSummary.ByMonth.First().Key == "2023-09" && scoreSummary.ByMonth["2024-01"] == .5m && scoreSummary.ByMonth["2024-02"] == 1.55m, "credit chart crosses year with six continuous months");
+            var emptyScores = CreditSummary.Create(new List<CreditRecord>(), new DateTime(2025, 2, 1));
+            Check(emptyScores.Total == 0 && emptyScores.LinkedTotal == 0 && emptyScores.ManualTotal == 0 && emptyScores.ByDay.Count == 28 && emptyScores.ByMonth.Values.All(v => v == 0), "empty credit month has zero statistics");
+            Check(CreditSummary.Create(scoreRecords, DateTime.MinValue).ByMonth.Count == 1 && CreditSummary.Create(scoreRecords, DateTime.MaxValue).ByDay.Count == 31, "credit summary handles both date boundaries");
+            var preciseScore = scoreRecords[0].Copy(); preciseScore.Points = 1.2345678901234567890123456789m;
+            Check(CreditSummary.Create(new[] { preciseScore }, new DateTime(2024, 2, 1)).ByDay["2024-02-01"] == preciseScore.Points, "credit summary retains all decimal precision");
+            var maximumScores = Enumerable.Range(0, 10000).Select(n => new CreditRecord { Id = Guid.NewGuid().ToString("N"), Title = "活动", Date = "2024-02-01", Points = 10000 }).ToList();
+            Check(CreditSummary.Create(maximumScores, new DateTime(2024, 2, 1)).ByDay["2024-02-01"] == 100000000m, "maximum credit count and score sum without overflow");
             var mealRecord = new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = "2024-02-29", Amount = 18.5m, Category = "餐饮", Meal = "午饭" };
             foreach (string meal in ExpenseRecord.Meals) { mealRecord.Meal = meal; mealRecord.Validate(); Check(mealRecord.Copy().Meal == meal, "meal subtype copied " + meal); }
             mealRecord.Meal = "夜宵"; Throws(() => mealRecord.Validate(), "unknown meal subtype rejected"); mealRecord.Meal = "午饭"; mealRecord.Category = "交通"; Throws(() => mealRecord.Validate(), "meal subtype on nonfood rejected"); mealRecord.Category = "餐饮";

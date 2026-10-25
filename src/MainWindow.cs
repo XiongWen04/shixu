@@ -29,6 +29,8 @@ namespace DeskTodo
         string taskSearch = "", taskTag = "", agendaQuery = "";
         string page = "月历";
         ExpensePanel expensePanel;
+        CreditPanel creditPanel;
+        public DateTime CreditDate { get { return creditPanel == null ? DateTime.Today : creditPanel.SelectedDate; } }
         public DateTime ExpenseDate { get { return expensePanel == null ? DateTime.Today : expensePanel.SelectedDate; } }
         bool showCompleted = true, compactCalendar;
         DateTime selected = DateTime.Today;
@@ -43,7 +45,7 @@ namespace DeskTodo
 
             SourceInitialized += (s, e) => { NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark"); NativeDesktop.RegisterActivation(this, app.BasePath, app.ShowMain, app.Exit); };
             Closing += (s, e) => { if (!app.Exiting) { e.Cancel = true; Hide(); } };
-            PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { if (page == "记账") app.EditExpense(null, ExpenseDate); else if (page == "综测") app.EditCredit(null); else app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
+            PreviewKeyDown += (s, e) => { if (e.Key == Key.N && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { if (page == "记账") app.EditExpense(null, ExpenseDate); else if (page == "综测") app.EditCredit(null, CreditDate); else app.Edit(null, page == "全部" ? (DateTime?)null : page == "月历" ? selected : DateTime.Today); e.Handled = true; } };
             var host = new Grid { ClipToBounds = true }; Content = host; host.Children.Add(backdrop); backgroundShade.SetResourceReference(Border.BackgroundProperty, "Surface"); host.Children.Add(backgroundShade); var layout = new DockPanel(); host.Children.Add(layout); UpdateBackground(app.BackgroundImage, app.Settings.BackgroundShade);
             var sidebar = new DockPanel { Width = 140, Margin = new Thickness(8, 22, 8, 20) };
             var sidebarCard = Ui.Card(sidebar, new Thickness(0)); sidebarCard.Margin = new Thickness(14, 18, 0, 18); DockPanel.SetDock(sidebarCard, Dock.Left); layout.Children.Add(sidebarCard);
@@ -101,7 +103,7 @@ namespace DeskTodo
             if (page == "学习统计") AddTool("周报 / 月报", () => SelectPage("学习报告"));
             if (page == "学习报告") { AddTool("学习统计", () => SelectPage("学习统计")); AddTool("返回番茄钟", () => SelectPage("番茄钟")); }
             if (page == "记账") AddTool("＋ 记一笔", () => app.EditExpense(null, ExpenseDate));
-            if (page == "综测") AddTool("＋ 添加加分", () => app.EditCredit(null));
+            if (page == "综测") AddTool("＋ 添加加分", () => app.EditCredit(null, CreditDate));
             if (page == "全部") { var add = Ui.Button("＋ 添加", () => app.Edit(null, null), "Primary"); add.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(add); }
             body.Children.Clear(); body.ColumnDefinitions.Clear(); body.RowDefinitions.Clear();
             if (page == "记账") RenderExpenses();
@@ -124,22 +126,8 @@ namespace DeskTodo
         }
         void RenderCredits()
         {
-            var records = app.Store.State.Credits; var panel = new DockPanel(); body.Children.Add(Ui.Card(panel, new Thickness(28)));
-            var top = new DockPanel { Margin = new Thickness(0, 0, 0, 28) }; DockPanel.SetDock(top, Dock.Top); panel.Children.Add(top);
-            var number = new StackPanel(); number.Children.Add(Ui.Text("累计综测加分", 12, "Muted")); var value = Ui.Text(records.Sum(c => c.Points).ToString("0.############################") + " 分", 42, "Accent", true); value.FontFamily = new FontFamily("Segoe UI"); number.Children.Add(value); top.Children.Add(number);
-            var count = Ui.Text(records.Count + " 项活动", 14, "Muted"); count.VerticalAlignment = VerticalAlignment.Bottom; count.Margin = new Thickness(28, 0, 0, 6); top.Children.Add(count);
-            var table = new StackPanel(); panel.Children.Add(Ui.Scroll(table));
-            var titles = new Grid { Margin = new Thickness(0, 0, 0, 6) }; titles.ColumnDefinitions.Add(new ColumnDefinition()); titles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) }); titles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); titles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(126) });
-            string[] cols = { "活动名称", "活动日期", "加分", "操作" }; for (int n = 0; n < cols.Length; n++) { var t = Ui.Text(cols[n], 11, "Muted"); t.Margin = new Thickness(14, 12, 0, 12); Grid.SetColumn(t, n); titles.Children.Add(t); } table.Children.Add(titles);
-            if (records.Count == 0) Ui.Empty(table, "还没有综测加分记录", "添加参加过的活动，记录每一份积累");
-            foreach (var record in records.OrderByDescending(c => c.Date))
-            {
-                var row = new Grid { Margin = new Thickness(14, 18, 0, 18) }; foreach (var c in titles.ColumnDefinitions) row.ColumnDefinitions.Add(new ColumnDefinition { Width = c.Width });
-                row.Children.Add(Ui.Text(record.Title, 15, "Text", true)); var date = Ui.Text(record.Date, 12, "Muted"); date.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(date, 1); row.Children.Add(date);
-                var points = Ui.Text("+" + record.Points.ToString("0.############################"), 18, "Accent", true); points.FontFamily = new FontFamily("Segoe UI"); Grid.SetColumn(points, 2); row.Children.Add(points);
-                var actions = new StackPanel { Orientation = Orientation.Horizontal }; actions.Children.Add(Ui.Button("修改", () => app.EditCredit(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteCredit(record), "Quiet")); Grid.SetColumn(actions, 3); row.Children.Add(actions);
-                var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); table.Children.Add(line);
-            }
+            if (creditPanel == null) creditPanel = new CreditPanel(app);
+            body.Children.Add(creditPanel); creditPanel.Refresh();
         }
         void RenderCalendar()
         {
