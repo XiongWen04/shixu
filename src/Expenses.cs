@@ -82,6 +82,20 @@ namespace DeskTodo
         public void Refresh()
         {
             root.Children.Clear(); var all = app.Store.State.Expenses; var summary = ExpenseSummary.Create(all, month, DateTime.Today);
+            var balance = new StackPanel(); balance.Children.Add(Ui.Text("现有余额", 15, "Text", true));
+            var balanceValue = Ui.Text(app.Store.State.ExpenseBalance.HasValue ? Money(app.Store.State.ExpenseBalance.Value) : "尚未设置", 32, "Accent", true);
+            AutomationProperties.SetName(balanceValue, "现有余额"); balanceValue.ToolTip = balanceValue.Text;
+            balance.Children.Add(new Viewbox { Child = balanceValue, Height = 48, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left });
+            balance.Children.Add(Hint("填写当前实际余额，已有账单不重复扣减；之后新增扣减、修改按差额调整、删除返还。"));
+            var balanceForm = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+            var balanceInput = new TextBox { Text = app.Store.State.ExpenseBalance.HasValue ? app.Store.State.ExpenseBalance.Value.ToString("0.00", CultureInfo.InvariantCulture) : "", MaxLength = 20, MinWidth = 120, ToolTip = "输入当前实际余额（元），可输入负数" };
+            AutomationProperties.SetName(balanceInput, "设置现有余额（元）");
+            var balanceError = Ui.Text("", 12, "Danger");
+            var balanceSave = Ui.Button("设置余额", () => {
+                decimal value;
+                if (!System.Text.RegularExpressions.Regex.IsMatch(balanceInput.Text.Trim(), @"\A-?[0-9]{1,12}(\.[0-9]{1,2})?\z") || !Decimal.TryParse(balanceInput.Text.Trim(), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value)) { balanceError.Text = "请输入有效余额，最多两位小数。"; return; }
+                app.SetExpenseBalance(value);
+            }, "Quiet"); DockPanel.SetDock(balanceSave, Dock.Right); balanceForm.Children.Add(balanceSave); balanceForm.Children.Add(balanceInput); balance.Children.Add(balanceForm); balance.Children.Add(balanceError); root.Children.Add(Card(balance));
             var overview = new UniformGrid { Columns = 3 };
             var current = Metric("所选月份支出", summary.Total, month.ToString("yyyy 年 M 月")); current.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(current);
             var today = Metric("今日支出", all.Where(r => r.Date == Dates.Key(DateTime.Today)).Sum(r => r.Amount), DateTime.Today.ToString("M 月 d 日")); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);

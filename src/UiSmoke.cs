@@ -327,6 +327,12 @@ namespace DeskTodo
             {
                 app.Main.SelectPage("记账"); app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "这个月还没有支出记录"), "expense empty state");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "尚未设置"), "balance starts unset");
+                var balanceInput = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "设置现有余额（元）");
+                balanceInput.Text = "1.001"; Controls<Button>(app.Main).First(b => (b.Content as string) == "设置余额").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!app.Store.State.ExpenseBalance.HasValue, "invalid balance leaves data unset");
+                balanceInput.Text = "100.00"; Controls<Button>(app.Main).First(b => (b.Content as string) == "设置余额").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
+                Check(app.Store.State.ExpenseBalance == 100m && Controls<TextBlock>(app.Main).Any(t => t.Text == "¥100.00"), "balance button persists and renders amount");
                 Action<bool, bool> edit = (existing, save) =>
                 {
                     Exception failure = null;
@@ -448,6 +454,9 @@ namespace DeskTodo
                 var smallPanel = Controls<ExpensePanel>(app.Main).First(); smallPanel.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expense-calendar-small.png")); Check(smallPanel.ScrollableHeight > 0, "minimum window scrolls to calendar and details");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(app.Store.State.Expenses.Count == beforeDelete - 1 && !app.Store.State.Expenses.Any(e => e.Note == "示例：地铁"), "delete selected expense");
+                Check(app.Store.State.ExpenseBalance == 100m - app.Store.State.Expenses.Sum(e => e.Amount), "balance follows add edit and delete transactions");
+                Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).ExpenseBalance == app.Store.State.ExpenseBalance, "balance persists with expenses");
+                Capture(app.Main, Path.Combine(root, "expense-balance.png"));
                 string savedId = app.Store.State.Expenses[0].Id;
                 app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders");
                 Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Any(e => e.Id == savedId), "expense persists on disk");

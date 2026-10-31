@@ -16,6 +16,7 @@ class CoreTests
         Directory.CreateDirectory(root);
         try
         {
+            Check(typeof(TodoState).GetField("ExpenseBalanceBase") != null, "state persists balance baseline");
             Check(typeof(TodoState).GetField("Expenses") != null, "state exposes independent expense records");
             Check(typeof(ExpenseRecord).GetField("Meal") != null, "expenses support meal subtype");
             Check(typeof(CreditRecord).Assembly.GetType("DeskTodo.CreditSummary") != null, "credits expose calendar and accumulation summary");
@@ -59,13 +60,21 @@ class CoreTests
                 using (var mealMoved = mealStore.MoveTo(Path.Combine(root, "meal-moved"))) Check(mealMoved.State.Expenses[0].Meal == "午饭", "meal subtype preserved by migration");
                 string savedMeal = File.ReadAllText(Path.Combine(mealStore.DirectoryPath, "tasks.json")); Throws(() => mealStore.ChangeState(state => state.Expenses[0].Meal = "bad"), "invalid meal transaction fails");
                 Check(mealStore.State.Expenses[0].Meal == "午饭" && File.ReadAllText(Path.Combine(mealStore.DirectoryPath, "tasks.json")) == savedMeal, "invalid meal transaction preserves memory and disk");
-                string legacyMeal = Path.Combine(root, "legacy-meal.json"); File.WriteAllText(legacyMeal, savedMeal.Replace("\"Version\":10", "\"Version\":9").Replace(",\"Meal\":\"午饭\"", ""));
+                string legacyMeal = Path.Combine(root, "legacy-meal.json"); File.WriteAllText(legacyMeal, savedMeal.Replace("\"Version\":11", "\"Version\":9").Replace(",\"Meal\":\"午饭\"", ""));
                 var legacyMealState = DataStore.ReadState(legacyMeal); Check(legacyMealState.Version == 9 && legacyMealState.Expenses[0].Meal == null && ExpenseSummary.Create(legacyMealState.Expenses, new DateTime(2024, 2, 1), DateTime.Today).ByMeal["其他"] == 18.6m, "v9 dining remains other without guessing");
             }
             var expenses = new TodoState();
             expenses.Expenses.Add(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = "2026-10-24", Amount = 0.1m, Category = "餐饮", Note = "示例" });
             expenses.Expenses.Add(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Date = "2026-10-24", Amount = 0.2m, Category = "其他" });
             expenses.Validate(); Check(expenses.Expenses.Sum(e => e.Amount) == 0.3m, "expense decimal totals exact");
+            Check(!expenses.ExpenseBalance.HasValue, "legacy balance stays unset");
+            expenses.SetExpenseBalance(100m); Check(expenses.ExpenseBalance == 100m, "setting current balance does not deduct old expenses");
+            var balanceCopy = expenses.Copy(); balanceCopy.Expenses[0].Amount = 1.1m; Check(balanceCopy.ExpenseBalance == 99m, "editing expense adjusts balance by difference");
+            balanceCopy.Expenses.RemoveAt(0); Check(balanceCopy.ExpenseBalance == 100.1m, "deleting expense refunds balance");
+            balanceCopy.SetExpenseBalance(0m); balanceCopy.Expenses[0].Amount = 1.2m; Check(balanceCopy.ExpenseBalance == -1m, "overspending permits negative balance");
+            Throws(() => expenses.SetExpenseBalance(.001m), "balance rejects fractions of cents");
+            Throws(() => expenses.SetExpenseBalance(1000000000000m), "balance rejects out of range");
+            Check(expenses.Copy().ExpenseBalance == 100m, "copy preserves balance baseline");
             var expenseCopy = expenses.Copy(); expenseCopy.Expenses[0].Note = "副本";
             Check(expenses.Expenses[0].Note == "示例", "expense snapshots deep copied");
             foreach (decimal invalid in new[] { 0m, -1m, .001m, 100000000m }) { expenseCopy.Expenses[0].Amount = invalid; Throws(() => expenseCopy.Validate(), "invalid expense amount rejected " + invalid); }
@@ -82,7 +91,7 @@ class CoreTests
             Check(DataStore.ReadState(legacyExpenses).Expenses.Count == 0, "v8 defaults to empty expense list");
             using (var expenseStore = DataStore.Open(Path.Combine(root, "expenses")))
             {
-                expenseStore.ChangeState(state => state.Expenses = expenses.Expenses.Select(e => e.Copy()).ToList());
+                expenseStore.ChangeState(state => { state.Expenses = expenses.Expenses.Select(e => e.Copy()).ToList(); state.SetExpenseBalance(100m); });
                 expenseStore.Change(items => items.Add(Item("普通待办", null)));
                 Check(expenseStore.State.Expenses.Count == 2, "todo mutation preserves expenses");
                 string saved = File.ReadAllText(Path.Combine(expenseStore.DirectoryPath, "tasks.json"));
@@ -90,7 +99,8 @@ class CoreTests
                 Check(File.ReadAllText(Path.Combine(expenseStore.DirectoryPath, "tasks.json")) == saved && expenseStore.State.Expenses[0].Amount == .1m, "failed expense save preserves memory and disk");
                 string expenseExport = Path.Combine(root, "expenses-export.json"); expenseStore.Export(expenseExport);
                 expenseStore.ChangeState(state => state.Expenses.Clear()); expenseStore.Import(expenseExport);
-                Check(expenseStore.State.Expenses.Count == 2 && expenseStore.State.Version == 10, "expense backup import restores v10 records");
+                Check(expenseStore.State.ExpenseBalance == 100m, "export and import preserve balance");
+                Check(expenseStore.State.Expenses.Count == 2 && expenseStore.State.Version == 11, "expense backup import restores v10 records");
                 using (var expenseMoved = expenseStore.MoveTo(Path.Combine(root, "expenses-moved"))) Check(expenseMoved.State.Expenses.Sum(e => e.Amount) == .3m, "data migration preserves expenses");
             }
             var credits = new TodoState();
@@ -134,7 +144,7 @@ class CoreTests
                 creditStore.Change(items => items.Add(Item("普通待办", null)));
                 string creditExport = Path.Combine(root, "credits-export.json"); creditStore.Export(creditExport);
                 var creditRestored = DataStore.ReadState(creditExport);
-                Check(creditRestored.Version == 10 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
+                Check(creditRestored.Version == 11 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
                 creditStore.ChangeState(state => state.Credits.Clear()); creditStore.Import(creditExport);
                 Check(creditStore.State.Credits.Count == 2, "import replaces and restores credits");
                 Throws(() => creditStore.ChangeState(state => state.Credits[0].Points = -1), "invalid credit save fails atomically");
@@ -305,10 +315,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 10 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 11 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 10, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 11, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");

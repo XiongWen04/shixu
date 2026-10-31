@@ -1,5 +1,7 @@
 ﻿# 拾序 Shixu · Windows 待办清单、番茄钟与学习计时
 
+v2.10.0：记账页顶部新增现有余额，首次填写当前实际金额，已有账单不重复扣款。之后新增支出自动扣减，修改按差额调整，删除返还；支持负余额和再次校正。余额随备份、导入替换及迁移保留。数据格式升级v11，兼容读取v1-v10，v2.9.1及更早版本不能读取v11，回退请使用升级前备份。193项核心及61项记账界面检查通过，未重跑其他界面专项或多DPI。
+
 <img src="src/AppLogo.png" alt="拾序的绿色小鸟图标" width="80">
 
 **面向大学生、研究生的 Windows 桌面日程与学习工具。** 用月历安排课程、组会和截止日期，用番茄钟或正向计时记录学习，再把参加过的活动与综测加分整理到同一个地方。
@@ -10,7 +12,7 @@
 
 基于 C# / WPF / .NET Framework 4.8，Windows x64 原生运行，无第三方运行依赖。
 
-**当前版本：v2.9.1 · Windows x64**
+**当前版本：v2.10.0 · Windows x64**
 
 [下载便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
@@ -20,7 +22,7 @@
 
 推荐 Windows 11 64 位；Windows 10 64 位需已安装 .NET Framework 4.8。
 
-1. [下载 v2.9.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.9.1/Shixu-v2.9.1-win-x64-portable.zip)，解压到有写入权限的文件夹。
+1. [下载 v2.10.0 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.10.0/Shixu-v2.10.0-win-x64-portable.zip)，解压到有写入权限的文件夹。
 2. 运行 `拾序.exe`，保留旁边的 `拾序.exe.config`。
 3. 打开“月历”选择日期，点击右侧“添加待办”；也可以在“全部待办”右上角添加，或按 `Ctrl+N`。
 4. 需要学习时，打开“学习”，选择倒计时或正向计时，填写名称后开始。

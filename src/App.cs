@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.9.1.0")]
+[assembly: AssemblyVersion("2.10.0.0")]
 
 namespace DeskTodo
 {
@@ -206,6 +206,11 @@ namespace DeskTodo
         public void EditExpense(ExpenseRecord record, DateTime? initialDate = null)
         {
             new ExpenseWindow(this, record, initialDate) { Owner = Main, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
+        }
+        public bool SetExpenseBalance(decimal amount)
+        {
+            try { Store.ChangeState(state => state.SetExpenseBalance(amount)); Refresh(); return true; }
+            catch (Exception ex) { if (TestMode) throw; Error("余额保存失败", ex); return false; }
         }
         public bool SaveExpense(ExpenseRecord record, bool existing)
         {
@@ -445,7 +450,7 @@ namespace DeskTodo
         }
         public void Import(string path)
         {
-            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.Expenses = imported.Expenses; state.Credits = imported.Credits; state.DailyGoalMinutes = imported.DailyGoalMinutes; state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
+            try { if (Store.State.ActiveFocus != null) throw new InvalidOperationException("请先结束当前学习，再导入备份。"); var imported = DataStore.ReadState(path); Schedule.Expand(imported, DateTime.Today.AddDays(62)); Store.ChangeState(state => { state.ExpenseBalanceBase = imported.ExpenseBalanceBase; state.Expenses = imported.Expenses; state.Credits = imported.Credits; state.DailyGoalMinutes = imported.DailyGoalMinutes; state.Items = imported.Items; state.Series = imported.Series; state.FocusHistory = imported.FocusHistory; state.ActiveFocus = imported.ActiveFocus; }); deleted = null; Refresh(); }
             catch (Exception ex) { Error("导入失败", ex); }
         }
         public void Exit()
