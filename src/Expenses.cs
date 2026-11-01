@@ -82,10 +82,13 @@ namespace DeskTodo
         public void Refresh()
         {
             root.Children.Clear(); var all = app.Store.State.Expenses; var summary = ExpenseSummary.Create(all, month, DateTime.Today);
-            var balance = new StackPanel(); balance.Children.Add(Ui.Text("现有余额", 15, "Text", true));
-            var balanceValue = Ui.Text(app.Store.State.ExpenseBalance.HasValue ? Money(app.Store.State.ExpenseBalance.Value) : "尚未设置", 32, "Accent", true);
+            var balanceStrip = new DockPanel { LastChildFill = true };
+            var balanceLabel = Ui.Text("现有余额", 13, "Muted"); balanceLabel.VerticalAlignment = VerticalAlignment.Center; balanceLabel.Margin = new Thickness(0, 0, 16, 0); DockPanel.SetDock(balanceLabel, Dock.Left); balanceStrip.Children.Add(balanceLabel);
+            var balanceValue = Ui.Text(app.Store.State.ExpenseBalance.HasValue ? Money(app.Store.State.ExpenseBalance.Value) : "尚未设置", 22, "Accent", true);
             AutomationProperties.SetName(balanceValue, "现有余额"); balanceValue.ToolTip = balanceValue.Text;
-            balance.Children.Add(new Viewbox { Child = balanceValue, Height = 48, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left });
+            balanceStrip.Children.Add(new Viewbox { Child = balanceValue, Height = 30, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left });
+            var balanceBar = Ui.Card(balanceStrip, new Thickness(16, 8, 16, 8)); balanceBar.Margin = new Thickness(0, 0, 0, 12); AutomationProperties.SetName(balanceBar, "余额信息栏"); root.Children.Add(balanceBar);
+            var balance = new StackPanel(); balance.Children.Add(Ui.Text("余额设置", 15, "Text", true));
             balance.Children.Add(Hint("填写当前实际余额，已有账单不重复扣减；之后新增扣减、修改按差额调整、删除返还。"));
             var balanceForm = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
             var balanceInput = new TextBox { Text = app.Store.State.ExpenseBalance.HasValue ? app.Store.State.ExpenseBalance.Value.ToString("0.00", CultureInfo.InvariantCulture) : "", MaxLength = 20, MinWidth = 120, ToolTip = "输入当前实际余额（元），可输入负数" };
@@ -95,7 +98,7 @@ namespace DeskTodo
                 decimal value;
                 if (!System.Text.RegularExpressions.Regex.IsMatch(balanceInput.Text.Trim(), @"\A-?[0-9]{1,12}(\.[0-9]{1,2})?\z") || !Decimal.TryParse(balanceInput.Text.Trim(), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value)) { balanceError.Text = "请输入有效余额，最多两位小数。"; return; }
                 app.SetExpenseBalance(value);
-            }, "Quiet"); DockPanel.SetDock(balanceSave, Dock.Right); balanceForm.Children.Add(balanceSave); balanceForm.Children.Add(balanceInput); balance.Children.Add(balanceForm); balance.Children.Add(balanceError); root.Children.Add(Card(balance));
+            }, "Quiet"); DockPanel.SetDock(balanceSave, Dock.Right); balanceForm.Children.Add(balanceSave); balanceForm.Children.Add(balanceInput); balance.Children.Add(balanceForm); balance.Children.Add(balanceError);
             var overview = new UniformGrid { Columns = 3 };
             var current = Metric("所选月份支出", summary.Total, month.ToString("yyyy 年 M 月")); current.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(current);
             var today = Metric("今日支出", all.Where(r => r.Date == Dates.Key(DateTime.Today)).Sum(r => r.Amount), DateTime.Today.ToString("M 月 d 日")); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);
@@ -150,7 +153,8 @@ namespace DeskTodo
                 var amount = Ui.Text(Money(record.Amount), 18, "Accent", true); amount.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(amount); var actions = new StackPanel { Orientation = Orientation.Horizontal }; actions.Children.Add(Ui.Button("修改", () => app.EditExpense(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteExpense(record), "Quiet")); right.Children.Add(actions);
                 var name = new StackPanel { Margin = new Thickness(0, 0, 10, 0) }; name.Children.Add(Ui.Text(record.Category + (record.Category == "餐饮" ? " · " + (record.Meal ?? "其他") : ""), 14, "Text", true)); var note = Hint(String.IsNullOrEmpty(record.Note) ? "日常支出" : record.Note); note.TextWrapping = TextWrapping.Wrap; name.Children.Add(note); row.Children.Add(name); var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); details.Children.Add(line);
             }
-            root.Children.Add(Columns(Card(calendar), Card(details), 1.35, summary.ByDay.Values.Any(value => value >= 1000000m)));
+            root.Children.Insert(2, compact ? Columns(Card(details), Card(calendar)) : Columns(Card(calendar), Card(details), 1.35, summary.ByDay.Values.Any(value => value >= 1000000m)));
+            root.Children.Add(Card(balance));
         }
         internal static Brush CategoryBrush(int index) { return Color(index); }
     }

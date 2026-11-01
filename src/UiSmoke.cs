@@ -328,6 +328,13 @@ namespace DeskTodo
                 app.Main.SelectPage("记账"); app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "这个月还没有支出记录"), "expense empty state");
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "尚未设置"), "balance starts unset");
+                var balanceStrip = Controls<Border>(app.Main).FirstOrDefault(b => AutomationProperties.GetName(b) == "余额信息栏");
+                Check(balanceStrip != null && balanceStrip.ActualHeight <= 64, "balance stays in compact information strip");
+                var layoutCalendar = Controls<UniformGrid>(app.Main).First(g => AutomationProperties.GetName(g) == "支出月历");
+                var layoutTrend = Controls<ExpenseChart>(app.Main).First(c => AutomationProperties.GetName(c).StartsWith("每日支出趋势图"));
+                var layoutSettings = Controls<Button>(app.Main).First(b => (b.Content as string) == "设置余额");
+                Check(layoutCalendar.TranslatePoint(new Point(), app.Main).Y < layoutTrend.TranslatePoint(new Point(), app.Main).Y, "calendar and bills come before statistics charts");
+                Check(layoutSettings.TranslatePoint(new Point(), app.Main).Y > layoutTrend.TranslatePoint(new Point(), app.Main).Y, "balance settings stay below expense content");
                 var balanceInput = Controls<TextBox>(app.Main).First(t => AutomationProperties.GetName(t) == "设置现有余额（元）");
                 balanceInput.Text = "1.001"; Controls<Button>(app.Main).First(b => (b.Content as string) == "设置余额").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(!app.Store.State.ExpenseBalance.HasValue, "invalid balance leaves data unset");
@@ -426,6 +433,7 @@ namespace DeskTodo
                 Check(Controls<ExpenseChart>(app.Main).Any(c => AutomationProperties.GetName(c).StartsWith("每日支出趋势图") && AutomationProperties.GetName(c).Contains(Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month))))), "whole month trend includes last day");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "近 7 天").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 DateTime sixWeekMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单下个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); sixWeekMonth = sixWeekMonth.AddMonths(1); app.Main.UpdateLayout();
                 for (int n = 0; n < 12; n++)
                 {
                     int calendarCells = (((((int)sixWeekMonth.DayOfWeek + 6) % 7) + DateTime.DaysInMonth(sixWeekMonth.Year, sixWeekMonth.Month) + 6) / 7) * 7;
@@ -445,12 +453,14 @@ namespace DeskTodo
                 {
                     app.ChangeTheme(theme); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-" + theme + ".png"));
                     Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "expenses render " + theme);
-                    var expensePanel = Controls<ExpensePanel>(app.Main).First(); expensePanel.ScrollToEnd(); app.Main.UpdateLayout();
+                    var expensePanel = Controls<ExpensePanel>(app.Main).First(); expensePanel.ScrollToTop(); app.Main.UpdateLayout();
                     var selectedButton = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + Dates.Key(DateTime.Today));
                     Check(selectedButton.ActualWidth > 0 && selectedButton.ActualHeight > 0, "calendar usable " + theme); Capture(app.Main, Path.Combine(root, "expense-calendar-" + theme + ".png")); expensePanel.ScrollToTop();
                 }
                 app.Main.Width = 960; app.Main.Height = 650; app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expenses-small.png"));
                 Check(Controls<Button>(app.Main).Where(b => AutomationProperties.GetName(b).StartsWith("导航 ")).Count() == 6, "all six navigation entries at minimum size");
+                var smallBill = Controls<TextBlock>(app.Main).First(t => t.Text == "示例：地铁");
+                Check(smallBill.TranslatePoint(new Point(), app.Main).Y < app.Main.ActualHeight - 80, "selected bills visible without scrolling at minimum size");
                 var smallPanel = Controls<ExpensePanel>(app.Main).First(); smallPanel.ScrollToEnd(); app.Main.UpdateLayout(); Capture(app.Main, Path.Combine(root, "expense-calendar-small.png")); Check(smallPanel.ScrollableHeight > 0, "minimum window scrolls to calendar and details");
                 Controls<Button>(app.Main).First(b => (b.Content as string) == "删除").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(app.Store.State.Expenses.Count == beforeDelete - 1 && !app.Store.State.Expenses.Any(e => e.Note == "示例：地铁"), "delete selected expense");
