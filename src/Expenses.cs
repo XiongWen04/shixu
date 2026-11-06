@@ -117,7 +117,7 @@ namespace DeskTodo
             }, "Quiet"); DockPanel.SetDock(balanceSave, Dock.Right); balanceForm.Children.Add(balanceSave); balanceForm.Children.Add(balanceInput); balance.Children.Add(balanceForm); balance.Children.Add(balanceError);
             var overview = new UniformGrid { Columns = 3 };
             var current = Metric("所选月份支出", summary.Total, month.ToString("yyyy 年 M 月")); current.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(current);
-            var today = Metric("今日支出", all.Where(r => !r.IsIncome && r.Date == Dates.Key(DateTime.Today)).Sum(r => r.Amount), DateTime.Today.ToString("M 月 d 日")); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);
+            var today = Metric("今日支出", all.Where(r => r.Date == Dates.Key(DateTime.Today)).Sum(r => r.BalanceDebit), "今日支出减收入"); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);
             overview.Children.Add(Metric("日均支出", summary.DailyAverage, "按 " + summary.AverageDays + " 天计算，含未记账日")); root.Children.Add(overview);
             var trend = new StackPanel(); var trendTop = new DockPanel(); var range = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(range, Dock.Right); trendTop.Children.Add(range);
             foreach (bool monthly in new[] { false, true }) { bool chosen = monthly; var button = Ui.Button(monthly ? "整月" : "近 7 天", () => { wholeMonth = chosen; Refresh(); }, "Quiet"); if (wholeMonth == chosen) button.SetResourceReference(Button.BackgroundProperty, "Soft"); range.Children.Add(button); }

@@ -476,7 +476,7 @@ namespace DeskTodo
                     {
                         Controls<RadioButton>(editor).First(r => (string)r.Content == "收入").IsChecked = true;
                         Check(Controls<ComboBox>(editor).First().Visibility == Visibility.Collapsed, "income hides expense category");
-                        Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）").Text = "50.25";
+                        Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）").Text = "10.25";
                         Controls<Button>(editor).First(b => (string)b.Content == "保存收入").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     }
                     catch (Exception ex) { incomeFailure = ex; editor.Close(); }
@@ -484,10 +484,12 @@ namespace DeskTodo
                 app.EditExpense(null, DateTime.Today);
                 if (incomeFailure != null) throw incomeFailure;
                 app.Main.UpdateLayout();
-                Check(app.Store.State.ExpenseBalance == previousBalance + 50.25m, "income dialog credits balance");
-                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "+¥50.25"), "income displayed in selected day");
+                Check(app.Store.State.ExpenseBalance == previousBalance + 10.25m, "income dialog credits balance");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "+¥10.25"), "income displayed in selected day");
+                var todayMetric = Controls<TextBlock>(app.Main).First(t => t.Text == "今日支出");
+                Check(Controls<TextBlock>(todayMetric.Parent).Any(t => t.Text == "¥10.00"), "today metric subtracts income from spending");
                 var storedIncome = DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Single(e => e.IsIncome);
-                Check(storedIncome.Amount == 50.25m, "income survives disk roundtrip");
+                Check(storedIncome.Amount == 10.25m, "income survives disk roundtrip");
                 var incomePanel = Controls<ExpensePanel>(app.Main).First(); incomePanel.ScrollToTop(); app.Main.UpdateLayout();
                 Capture(app.Main, Path.Combine(root, "income-ledger.png"));
                                 string savedId = app.Store.State.Expenses[0].Id;
