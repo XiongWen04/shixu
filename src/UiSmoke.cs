@@ -400,7 +400,7 @@ namespace DeskTodo
                 app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 9.99m, Category = "其他", Date = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)), Note = "示例：上月支出" }, false);
                 app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "today total excludes other days");
-                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 支出 ¥26.25"), "daily subtotal exact");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 净支出 ¥26.25"), "daily subtotal exact");
                 Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单上个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
                 string priorDate = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1));
                 Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + priorDate).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
@@ -488,6 +488,10 @@ namespace DeskTodo
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "+¥10.25"), "income displayed in selected day");
                 var todayMetric = Controls<TextBlock>(app.Main).First(t => t.Text == "今日支出");
                 Check(Controls<TextBlock>(todayMetric.Parent).Any(t => t.Text == "¥10.00"), "today metric subtracts income from spending");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 净支出 ¥10.00"), "selected day shows net spending");
+                var netDay = Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + Dates.Key(DateTime.Today));
+                Check(Controls<TextBlock>(netDay).Any(t => t.Text == "10.00"), "calendar shows net spending");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "−¥20.25"), "expense row has debit sign");
                 var storedIncome = DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Single(e => e.IsIncome);
                 Check(storedIncome.Amount == 10.25m, "income survives disk roundtrip");
                 var incomePanel = Controls<ExpensePanel>(app.Main).First(); incomePanel.ScrollToTop(); app.Main.UpdateLayout();

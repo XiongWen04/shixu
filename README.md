@@ -1,5 +1,7 @@
 ﻿# 拾序 Shixu · Windows 待办清单、番茄钟与学习计时
 
+v2.11.2：月历、所选日汇总与顶部「今日支出」统一显示净支出（支出减收入）。流水逐笔显示方向，支出标 −，收入标 +。
+
 v2.11.1：记账页「今日支出」按今天支出减今天收入显示。例如支出30元、收入20元，显示10元。收入超过支出时显示负数。
 
 v2.11.0：记账页点击「记一笔」可选「收入」，填写金额、日期和备注。收入增加已设置的余额，修改或删除会同步调整。月历用 + 标识收入，当天账单区分收支。数据格式升级为 v12，回退旧版请使用升级前备份。
@@ -18,7 +20,7 @@ v2.10.0：记账页顶部新增现有余额，首次填写当前实际金额，�
 
 基于 C# / WPF / .NET Framework 4.8，Windows x64 原生运行，无第三方运行依赖。
 
-**当前版本：v2.11.1 · Windows x64**
+**当前版本：v2.11.2 · Windows x64**
 
 [下载便携版](https://github.com/XiongWen04/shixu/releases/latest) · [使用说明](docs/使用说明.md) · [版本记录](https://github.com/XiongWen04/shixu/releases)
 
@@ -28,7 +30,7 @@ v2.10.0：记账页顶部新增现有余额，首次填写当前实际金额，�
 
 推荐 Windows 11 64 位；Windows 10 64 位需已安装 .NET Framework 4.8。
 
-1. [下载 v2.11.1 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.11.1/Shixu-v2.11.1-win-x64-portable.zip)，解压到有写入权限的文件夹。
+1. [下载 v2.11.2 便携包](https://github.com/XiongWen04/shixu/releases/download/v2.11.2/Shixu-v2.11.2-win-x64-portable.zip)，解压到有写入权限的文件夹。
 2. 运行 `拾序.exe`，保留旁边的 `拾序.exe.config`。
 3. 打开“月历”选择日期，点击右侧“添加待办”；也可以在“全部待办”右上角添加，或按 `Ctrl+N`。
 4. 需要学习时，打开“学习”，选择倒计时或正向计时，填写名称后开始。
