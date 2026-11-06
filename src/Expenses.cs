@@ -15,36 +15,52 @@ namespace DeskTodo
     {
         public ExpenseWindow(AppController app, ExpenseRecord existing, DateTime? initialDate = null)
         {
-            Title = existing == null ? "记一笔" : "修改支出"; Width = 480; Height = Math.Min(650, SystemParameters.WorkArea.Height - 64); MinWidth = 420; MinHeight = 460; ShowInTaskbar = false; Ui.Icon(this);
+            Title = existing == null ? "记一笔" : existing.IsIncome ? "修改收入" : "修改支出"; Width = 480; Height = Math.Min(650, SystemParameters.WorkArea.Height - 64); MinWidth = 420; MinHeight = 460; ShowInTaskbar = false; Ui.Icon(this);
             SourceInitialized += (s, e) => NativeDesktop.DarkTitle(this, app.Settings.Theme == "dark");
             var root = new DockPanel { Margin = new Thickness(26) }; Content = root;
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) }; DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons);
             var cancel = Ui.Button("取消", () => Close()); cancel.IsCancel = true; cancel.Margin = new Thickness(0, 0, 10, 0); buttons.Children.Add(cancel);
             var fields = new StackPanel(); root.Children.Add(Ui.Scroll(fields)); fields.Children.Add(Ui.Text(Title, 24, "Text", true));
-            var hint = Ui.Text("随手记录，让每一笔花销都有迹可循。", 12, "Muted"); hint.Margin = new Thickness(0, 8, 0, 0); fields.Children.Add(hint);
+            var hint = Ui.Text("记录一笔支出或收入。", 12, "Muted"); hint.Margin = new Thickness(0, 8, 0, 0); fields.Children.Add(hint);
+            var direction = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
+            var spending = new RadioButton { Content = "支出", IsChecked = existing == null || !existing.IsIncome, Margin = new Thickness(0, 0, 18, 0) };
+            var income = new RadioButton { Content = "收入", IsChecked = existing != null && existing.IsIncome };
+            direction.Children.Add(spending); direction.Children.Add(income); fields.Children.Add(direction);
             var amount = new TextBox { Text = existing == null ? "" : existing.Amount.ToString("0.00", CultureInfo.InvariantCulture), MaxLength = 32, FontSize = 24, ToolTip = "例如 18.50，单位：元" };
             var date = new DatePicker { SelectedDate = existing == null ? initialDate ?? DateTime.Today : DateTime.ParseExact(existing.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture), FirstDayOfWeek = DayOfWeek.Monday };
-            var category = new ComboBox { ItemsSource = ExpenseRecord.Categories, SelectedItem = existing == null ? "其他" : existing.Category };
+            var category = new ComboBox { ItemsSource = ExpenseRecord.Categories, SelectedItem = existing == null || existing.IsIncome ? "其他" : existing.Category };
             var note = new TextBox { Text = existing == null ? "" : existing.Note ?? "", MaxLength = 200, ToolTip = "例如：午饭、地铁、买书" };
-            string[] labels = { "金额（元）", "支出日期", "支出分类", "备注（可选）" }; Control[] inputs = { amount, date, category, note };
+            string[] labels = { "金额（元）", "记账日期", "支出分类", "备注（可选）" }; Control[] inputs = { amount, date, category, note };
             var mealFields = new StackPanel { Margin = new Thickness(0, 14, 0, 0) }; mealFields.Children.Add(Ui.Text("餐饮类型", 12, "Muted"));
             var mealButtons = new UniformGrid { Columns = 4, Margin = new Thickness(0, 7, 0, 0) }; mealFields.Children.Add(mealButtons);
             string selectedMeal = existing == null ? "其他" : existing.Meal ?? "其他";
             Action updateMeals = () => { foreach (Button button in mealButtons.Children) { bool chosen = (string)button.Content == selectedMeal; button.SetResourceReference(Button.BackgroundProperty, chosen ? "Soft" : "Panel"); button.SetResourceReference(Button.BorderBrushProperty, chosen ? "Accent" : "Line"); AutomationProperties.SetHelpText(button, chosen ? "已选择" : "未选择"); } };
             foreach (string meal in ExpenseRecord.Meals) { string choice = meal; var button = Ui.Button(choice, () => { selectedMeal = choice; updateMeals(); }, "Quiet"); button.BorderThickness = new Thickness(1); button.Margin = new Thickness(0, 0, 6, 0); AutomationProperties.SetName(button, "餐饮类型 " + meal); mealButtons.Children.Add(button); }
-            updateMeals(); Action updateCategory = () => mealFields.Visibility = (string)category.SelectedItem == "餐饮" ? Visibility.Visible : Visibility.Collapsed;
+            updateMeals(); Action updateCategory = () => mealFields.Visibility = income.IsChecked != true && (string)category.SelectedItem == "餐饮" ? Visibility.Visible : Visibility.Collapsed;
             category.SelectionChanged += (s, e) => updateCategory(); updateCategory();
-            for (int n = 0; n < labels.Length; n++) { var label = Ui.Text(labels[n], 12, "Muted"); label.Margin = new Thickness(0, 16, 0, 6); fields.Children.Add(label); AutomationProperties.SetName(inputs[n], labels[n]); fields.Children.Add(inputs[n]); if (n == 2) fields.Children.Add(mealFields); }
+            TextBlock categoryLabel = null;
+            for (int n = 0; n < labels.Length; n++) { var label = Ui.Text(labels[n], 12, "Muted"); label.Margin = new Thickness(0, 16, 0, 6); fields.Children.Add(label); AutomationProperties.SetName(inputs[n], labels[n]); fields.Children.Add(inputs[n]); if (n == 2) { categoryLabel = label; fields.Children.Add(mealFields); } }
             var error = Ui.Text("", 12, "Danger"); error.Margin = new Thickness(0, 12, 0, 0); fields.Children.Add(error);
             amount.TextChanged += (s, e) => error.Text = ""; date.SelectedDateChanged += (s, e) => error.Text = ""; category.SelectionChanged += (s, e) => error.Text = ""; note.TextChanged += (s, e) => error.Text = "";
             var save = Ui.Button("保存支出", () =>
             {
                 decimal value;
                 if (!System.Text.RegularExpressions.Regex.IsMatch(amount.Text.Trim(), @"\A[0-9]{1,8}(\.[0-9]{1,2})?\z") || !Decimal.TryParse(amount.Text.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value)) { error.Text = "请输入有效金额，例如 18.50，最多两位小数。"; amount.Focus(); return; }
-                var record = new ExpenseRecord { Id = existing == null ? Guid.NewGuid().ToString("N") : existing.Id, Amount = value, Date = date.SelectedDate.HasValue ? Dates.Key(date.SelectedDate.Value) : null, Category = category.SelectedItem as string, Meal = (string)category.SelectedItem == "餐饮" ? selectedMeal : null, Note = note.Text.Trim() };
+                var record = new ExpenseRecord { Id = existing == null ? Guid.NewGuid().ToString("N") : existing.Id, Amount = value, Date = date.SelectedDate.HasValue ? Dates.Key(date.SelectedDate.Value) : null, Category = income.IsChecked == true ? ExpenseRecord.IncomeCategory : category.SelectedItem as string, Meal = income.IsChecked != true && (string)category.SelectedItem == "餐饮" ? selectedMeal : null, Note = note.Text.Trim() };
                 try { record.Validate(); } catch (Exception ex) { error.Text = ex.Message; return; }
                 if (app.SaveExpense(record, existing != null)) Close();
             }, "Primary"); save.IsDefault = true; buttons.Children.Add(save);
+            Action updateDirection = () =>
+            {
+                bool isIncome = income.IsChecked == true;
+                categoryLabel.Visibility = category.Visibility = isIncome ? Visibility.Collapsed : Visibility.Visible;
+                save.Content = isIncome ? "保存收入" : "保存支出";
+                error.Text = "";
+                updateCategory();
+            };
+            spending.Checked += (s, e) => updateDirection();
+            income.Checked += (s, e) => updateDirection();
+            updateDirection();
             Loaded += (s, e) => { amount.Focus(); amount.SelectAll(); };
         }
     }
@@ -89,7 +105,7 @@ namespace DeskTodo
             balanceStrip.Children.Add(new Viewbox { Child = balanceValue, Height = 30, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left });
             var balanceBar = Ui.Card(balanceStrip, new Thickness(16, 8, 16, 8)); balanceBar.Margin = new Thickness(0, 0, 0, 12); AutomationProperties.SetName(balanceBar, "余额信息栏"); root.Children.Add(balanceBar);
             var balance = new StackPanel(); balance.Children.Add(Ui.Text("余额设置", 15, "Text", true));
-            balance.Children.Add(Hint("填写当前实际余额，已有账单不重复扣减；之后新增扣减、修改按差额调整、删除返还。"));
+            balance.Children.Add(Hint("填写当前实际余额，已有账单不重复扣减；之后支出扣减、收入入账。"));
             var balanceForm = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
             var balanceInput = new TextBox { Text = app.Store.State.ExpenseBalance.HasValue ? app.Store.State.ExpenseBalance.Value.ToString("0.00", CultureInfo.InvariantCulture) : "", MaxLength = 20, MinWidth = 120, ToolTip = "输入当前实际余额（元），可输入负数" };
             AutomationProperties.SetName(balanceInput, "设置现有余额（元）");
@@ -101,7 +117,7 @@ namespace DeskTodo
             }, "Quiet"); DockPanel.SetDock(balanceSave, Dock.Right); balanceForm.Children.Add(balanceSave); balanceForm.Children.Add(balanceInput); balance.Children.Add(balanceForm); balance.Children.Add(balanceError);
             var overview = new UniformGrid { Columns = 3 };
             var current = Metric("所选月份支出", summary.Total, month.ToString("yyyy 年 M 月")); current.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(current);
-            var today = Metric("今日支出", all.Where(r => r.Date == Dates.Key(DateTime.Today)).Sum(r => r.Amount), DateTime.Today.ToString("M 月 d 日")); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);
+            var today = Metric("今日支出", all.Where(r => !r.IsIncome && r.Date == Dates.Key(DateTime.Today)).Sum(r => r.Amount), DateTime.Today.ToString("M 月 d 日")); today.Margin = new Thickness(0, 0, 14, 16); overview.Children.Add(today);
             overview.Children.Add(Metric("日均支出", summary.DailyAverage, "按 " + summary.AverageDays + " 天计算，含未记账日")); root.Children.Add(overview);
             var trend = new StackPanel(); var trendTop = new DockPanel(); var range = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(range, Dock.Right); trendTop.Children.Add(range);
             foreach (bool monthly in new[] { false, true }) { bool chosen = monthly; var button = Ui.Button(monthly ? "整月" : "近 7 天", () => { wholeMonth = chosen; Refresh(); }, "Quiet"); if (wholeMonth == chosen) button.SetResourceReference(Button.BackgroundProperty, "Soft"); range.Children.Add(button); }
@@ -128,11 +144,13 @@ namespace DeskTodo
                 var progress = new ProgressBar { Minimum = 0, Maximum = 100, Value = summary.ByCategory["餐饮"] == 0 ? 0 : (double)(value / summary.ByCategory["餐饮"] * 100), Height = 4, Margin = new Thickness(0, 8, 0, 0), BorderThickness = new Thickness(0) }; progress.SetResourceReference(ProgressBar.ForegroundProperty, "Accent"); progress.SetResourceReference(ProgressBar.BackgroundProperty, "Soft"); AutomationProperties.SetName(progress, meal + "支出 " + Money(value)); panel.Children.Add(progress); mealGrid.Children.Add(panel);
             }
             meals.Children.Add(mealGrid); root.Children.Add(Card(meals));
+            var incomeByDay = all.Where(e => e.IsIncome && summary.ByDay.ContainsKey(e.Date))
+                .GroupBy(e => e.Date).ToDictionary(g => g.Key, g => g.Sum(e => e.Amount));
             var calendar = new StackPanel(); var bar = new DockPanel(); var monthButtons = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(monthButtons, Dock.Right); bar.Children.Add(monthButtons);
             var previous = Ui.Button("‹", () => ChangeMonth(month.AddMonths(-1)), "Quiet"); previous.IsEnabled = month.Year > 1 || month.Month > 1; AutomationProperties.SetName(previous, "账单上个月"); previous.ToolTip = "上个月"; monthButtons.Children.Add(previous);
             monthButtons.Children.Add(Ui.Button("本月", () => ChangeMonth(DateTime.Today), "Quiet")); var next = Ui.Button("›", () => ChangeMonth(month.AddMonths(1)), "Quiet"); next.IsEnabled = month.Year < 9999 || month.Month < 12; next.ToolTip = "下个月"; AutomationProperties.SetName(next, "账单下个月"); monthButtons.Children.Add(next);
             bar.Children.Add(Ui.Text(month.ToString("yyyy年M月"), 18, "Text", true)); calendar.Children.Add(bar);
-            if (summary.Records.Count == 0) { var empty = Hint("这个月还没有支出记录"); empty.Margin = new Thickness(0, 10, 0, 0); calendar.Children.Add(empty); }
+            if (summary.Records.Count == 0 && incomeByDay.Count == 0) { var empty = Hint("这个月还没有支出记录"); empty.Margin = new Thickness(0, 10, 0, 0); calendar.Children.Add(empty); }
             var weekdays = new UniformGrid { Columns = 7, Margin = new Thickness(0, 16, 0, 6) }; foreach (string name in new[] { "一", "二", "三", "四", "五", "六", "日" }) { var text = Hint(name); text.TextAlignment = TextAlignment.Center; weekdays.Children.Add(text); } calendar.Children.Add(weekdays);
             int offset = ((int)month.DayOfWeek + 6) % 7, count = DateTime.DaysInMonth(month.Year, month.Month), cells = ((offset + count + 6) / 7) * 7;
             var days = new UniformGrid { Columns = 7, Rows = cells / 7 }; AutomationProperties.SetName(days, "支出月历");
@@ -141,17 +159,21 @@ namespace DeskTodo
                 int day = n - offset + 1; if (day < 1 || day > count) { days.Children.Add(new Border()); continue; }
                 DateTime date = month.AddDays(day - 1); string key = Dates.Key(date); decimal value = summary.ByDay[key]; bool active = date == SelectedDate;
                 var content = new StackPanel(); var number = Ui.Text(day.ToString(), 13, active ? "Accent" : "Text", active || date == DateTime.Today); number.TextAlignment = TextAlignment.Center; content.Children.Add(number);
-                var amount = Ui.Text(value == 0 ? "—" : value.ToString("0.00"), 11, active ? "Accent" : "Muted"); amount.TextAlignment = TextAlignment.Center; amount.TextWrapping = TextWrapping.NoWrap; content.Children.Add(new Viewbox { Child = amount, Height = 17, Margin = new Thickness(0, 5, 0, 0), Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly });
-                var button = Ui.Button("", () => { SelectedDate = date; Refresh(); }, "Quiet"); button.Content = content; button.Height = 62; button.MinWidth = 0; button.Margin = new Thickness(2); button.Padding = new Thickness(2, 6, 2, 6); button.BorderThickness = new Thickness(active ? 1 : 0); button.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "MainCanvas"); button.SetResourceReference(Button.BorderBrushProperty, active ? "Accent" : "Line"); button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.ToolTip = key + " · " + Money(value); AutomationProperties.SetName(button, "支出日期 " + key); days.Children.Add(button);
+                decimal dailyIncome; incomeByDay.TryGetValue(key, out dailyIncome);
+                string dayAmount = value == 0 ? "—" : value.ToString("0.00");
+                if (dailyIncome > 0) dayAmount = (value == 0 ? "" : dayAmount + " / ") + "+" + dailyIncome.ToString("0.00");
+                var amount = Ui.Text(dayAmount, 11, active ? "Accent" : "Muted"); amount.TextAlignment = TextAlignment.Center; amount.TextWrapping = TextWrapping.NoWrap; content.Children.Add(new Viewbox { Child = amount, Height = 17, Margin = new Thickness(0, 5, 0, 0), Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly });
+                var button = Ui.Button("", () => { SelectedDate = date; Refresh(); }, "Quiet"); button.Content = content; button.Height = 62; button.MinWidth = 0; button.Margin = new Thickness(2); button.Padding = new Thickness(2, 6, 2, 6); button.BorderThickness = new Thickness(active ? 1 : 0); button.SetResourceReference(Button.BackgroundProperty, active ? "Soft" : "MainCanvas"); button.SetResourceReference(Button.BorderBrushProperty, active ? "Accent" : "Line"); button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.ToolTip = key + " · 支出 " + Money(value) + (dailyIncome > 0 ? " · 收入 " + Money(dailyIncome) : ""); AutomationProperties.SetName(button, "支出日期 " + key); days.Children.Add(button);
             }
-            calendar.Children.Add(days); var calendarHint = Hint("每日支出（元） · 点击日期查看全部明细"); calendarHint.Margin = new Thickness(0, 12, 0, 0); calendar.Children.Add(calendarHint);
-            var details = new StackPanel(); details.Children.Add(Ui.Text(SelectedDate.ToString("M月d日 dddd"), 18, "Text", true)); string selectedKey = Dates.Key(SelectedDate); var records = summary.Records.Where(e => e.Date == selectedKey).Reverse().ToList(); var subtotal = Hint(selectedKey + " · 合计 " + Money(records.Sum(e => e.Amount))); subtotal.Margin = new Thickness(0, 7, 0, 15); details.Children.Add(subtotal);
-            if (records.Count == 0) Ui.Empty(details, "这一天还没有支出记录", "点击“记一笔”，记录这一天的花销");
+            calendar.Children.Add(days); var calendarHint = Hint("每日金额（元） · + 表示收入"); calendarHint.Margin = new Thickness(0, 12, 0, 0); calendar.Children.Add(calendarHint);
+            var details = new StackPanel(); details.Children.Add(Ui.Text(SelectedDate.ToString("M月d日 dddd"), 18, "Text", true)); string selectedKey = Dates.Key(SelectedDate); var records = all.Where(e => e.Date == selectedKey).Reverse().ToList();
+            var subtotal = Hint(selectedKey + " · 支出 " + Money(records.Where(e => !e.IsIncome).Sum(e => e.Amount)) + (records.Any(e => e.IsIncome) ? " · 收入 " + Money(records.Where(e => e.IsIncome).Sum(e => e.Amount)) : "")); subtotal.Margin = new Thickness(0, 7, 0, 15); details.Children.Add(subtotal);
+            if (records.Count == 0) Ui.Empty(details, "这一天还没有收支记录", "点击“记一笔”，记录这一天的收支");
             foreach (var record in records)
             {
                 var row = new DockPanel { Margin = new Thickness(0, 12, 0, 12) }; var right = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right }; DockPanel.SetDock(right, Dock.Right); row.Children.Add(right);
-                var amount = Ui.Text(Money(record.Amount), 18, "Accent", true); amount.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(amount); var actions = new StackPanel { Orientation = Orientation.Horizontal }; actions.Children.Add(Ui.Button("修改", () => app.EditExpense(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteExpense(record), "Quiet")); right.Children.Add(actions);
-                var name = new StackPanel { Margin = new Thickness(0, 0, 10, 0) }; name.Children.Add(Ui.Text(record.Category + (record.Category == "餐饮" ? " · " + (record.Meal ?? "其他") : ""), 14, "Text", true)); var note = Hint(String.IsNullOrEmpty(record.Note) ? "日常支出" : record.Note); note.TextWrapping = TextWrapping.Wrap; name.Children.Add(note); row.Children.Add(name); var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); details.Children.Add(line);
+                var amount = Ui.Text((record.IsIncome ? "+" : "") + Money(record.Amount), 18, "Accent", true); amount.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(amount); var actions = new StackPanel { Orientation = Orientation.Horizontal }; actions.Children.Add(Ui.Button("修改", () => app.EditExpense(record), "Quiet")); actions.Children.Add(Ui.Button("删除", () => app.DeleteExpense(record), "Quiet")); right.Children.Add(actions);
+                var name = new StackPanel { Margin = new Thickness(0, 0, 10, 0) }; name.Children.Add(Ui.Text(record.Category + (record.Category == "餐饮" ? " · " + (record.Meal ?? "其他") : ""), 14, "Text", true)); var note = Hint(String.IsNullOrEmpty(record.Note) ? (record.IsIncome ? "入账" : "日常支出") : record.Note); note.TextWrapping = TextWrapping.Wrap; name.Children.Add(note); row.Children.Add(name); var line = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "Line"); details.Children.Add(line);
             }
             root.Children.Insert(2, compact ? Columns(Card(details), Card(calendar)) : Columns(Card(calendar), Card(details), 1.35, summary.ByDay.Values.Any(value => value >= 1000000m)));
             root.Children.Add(Card(balance));

@@ -16,7 +16,7 @@ using Forms = System.Windows.Forms;
 
 [assembly: AssemblyTitle("拾序")]
 [assembly: AssemblyProduct("拾序 · 桌面待办")]
-[assembly: AssemblyVersion("2.10.1.0")]
+[assembly: AssemblyVersion("2.11.0.0")]
 
 namespace DeskTodo
 {
@@ -218,18 +218,18 @@ namespace DeskTodo
             {
                 Store.ChangeState(state =>
                 {
-                    if (existing) { int index = state.Expenses.FindIndex(e => e.Id == record.Id); if (index < 0) throw new InvalidOperationException("这笔支出已不存在。"); state.Expenses[index] = record.Copy(); }
+                    if (existing) { int index = state.Expenses.FindIndex(e => e.Id == record.Id); if (index < 0) throw new InvalidOperationException("这笔账单已不存在。"); state.Expenses[index] = record.Copy(); }
                     else state.Expenses.Add(record.Copy());
                 });
                 Refresh(); return true;
             }
-            catch (Exception ex) { if (TestMode) throw; Error("支出保存失败", ex); return false; }
+            catch (Exception ex) { if (TestMode) throw; Error("账单保存失败", ex); return false; }
         }
         public void DeleteExpense(ExpenseRecord record)
         {
-            if (!TestMode && MessageBox.Show("删除这笔支出：" + record.Category + " ¥" + record.Amount.ToString("0.00") + "？", "删除支出", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (!TestMode && MessageBox.Show("删除这笔账单：" + record.Category + " ¥" + record.Amount.ToString("0.00") + "？", "删除账单", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             try { Store.ChangeState(state => state.Expenses.RemoveAll(e => e.Id == record.Id)); Refresh(); }
-            catch (Exception ex) { if (TestMode) throw; Error("支出删除失败", ex); }
+            catch (Exception ex) { if (TestMode) throw; Error("账单删除失败", ex); }
         }
         public void EditCredit(CreditRecord record, DateTime? initialDate = null)
         {

@@ -363,7 +363,7 @@ namespace DeskTodo
                             amount.Text = existing ? "20.25" : "18.50"; category.SelectedItem = "餐饮"; note.Text = existing ? "示例：晚饭" : "示例：午饭";
                             Controls<Button>(editor).First(b => AutomationProperties.GetName(b) == "餐饮类型 " + (existing ? "晚饭" : "午饭")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                             date.SelectedDate = null; button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(editor.IsVisible, "missing expense date rejected"); date.SelectedDate = DateTime.Today;
-                            Check(!Controls<TextBlock>(editor).Any(t => t.Text == "请选择有效的支出日期。"), "corrected expense clears validation hint");
+                            Check(!Controls<TextBlock>(editor).Any(t => t.Text == "请选择有效的记账日期。"), "corrected expense clears validation hint");
                             Capture(editor, Path.Combine(root, "expense-editor.png")); button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                         }
                         catch (Exception ex) { failure = ex; }
@@ -400,7 +400,7 @@ namespace DeskTodo
                 app.SaveExpense(new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Amount = 9.99m, Category = "其他", Date = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)), Note = "示例：上月支出" }, false);
                 app.Main.UpdateLayout();
                 Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "¥26.25"), "today total excludes other days");
-                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 合计 ¥26.25"), "daily subtotal exact");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == Dates.Key(DateTime.Today) + " · 支出 ¥26.25"), "daily subtotal exact");
                 Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "账单上个月").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
                 string priorDate = Dates.Key(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1));
                 Controls<Button>(app.Main).First(b => AutomationProperties.GetName(b) == "支出日期 " + priorDate).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); app.Main.UpdateLayout();
@@ -467,7 +467,30 @@ namespace DeskTodo
                 Check(app.Store.State.ExpenseBalance == 100m - app.Store.State.Expenses.Sum(e => e.Amount), "balance follows add edit and delete transactions");
                 Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).ExpenseBalance == app.Store.State.ExpenseBalance, "balance persists with expenses");
                 Capture(app.Main, Path.Combine(root, "expense-balance.png"));
-                string savedId = app.Store.State.Expenses[0].Id;
+                decimal previousBalance = app.Store.State.ExpenseBalance.Value;
+                Exception incomeFailure = null;
+                app.Main.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var editor = Application.Current.Windows.OfType<ExpenseWindow>().Single();
+                    try
+                    {
+                        Controls<RadioButton>(editor).First(r => (string)r.Content == "收入").IsChecked = true;
+                        Check(Controls<ComboBox>(editor).First().Visibility == Visibility.Collapsed, "income hides expense category");
+                        Controls<TextBox>(editor).First(t => AutomationProperties.GetName(t) == "金额（元）").Text = "50.25";
+                        Controls<Button>(editor).First(b => (string)b.Content == "保存收入").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
+                    catch (Exception ex) { incomeFailure = ex; editor.Close(); }
+                }));
+                app.EditExpense(null, DateTime.Today);
+                if (incomeFailure != null) throw incomeFailure;
+                app.Main.UpdateLayout();
+                Check(app.Store.State.ExpenseBalance == previousBalance + 50.25m, "income dialog credits balance");
+                Check(Controls<TextBlock>(app.Main).Any(t => t.Text == "+¥50.25"), "income displayed in selected day");
+                var storedIncome = DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Single(e => e.IsIncome);
+                Check(storedIncome.Amount == 50.25m, "income survives disk roundtrip");
+                var incomePanel = Controls<ExpensePanel>(app.Main).First(); incomePanel.ScrollToTop(); app.Main.UpdateLayout();
+                Capture(app.Main, Path.Combine(root, "income-ledger.png"));
+                                string savedId = app.Store.State.Expenses[0].Id;
                 app.Main.SelectPage("月历"); app.Main.UpdateLayout(); Check(app.Main.CalendarCellCount >= 28, "calendar still renders");
                 Check(DataStore.ReadState(Path.Combine(app.Store.DirectoryPath, "tasks.json")).Expenses.Any(e => e.Id == savedId), "expense persists on disk");
                 File.WriteAllText(Path.Combine(root, "ui-report.txt"), "EXPENSES PASS: " + passed); app.Exit();

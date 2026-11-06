@@ -60,7 +60,7 @@ class CoreTests
                 using (var mealMoved = mealStore.MoveTo(Path.Combine(root, "meal-moved"))) Check(mealMoved.State.Expenses[0].Meal == "午饭", "meal subtype preserved by migration");
                 string savedMeal = File.ReadAllText(Path.Combine(mealStore.DirectoryPath, "tasks.json")); Throws(() => mealStore.ChangeState(state => state.Expenses[0].Meal = "bad"), "invalid meal transaction fails");
                 Check(mealStore.State.Expenses[0].Meal == "午饭" && File.ReadAllText(Path.Combine(mealStore.DirectoryPath, "tasks.json")) == savedMeal, "invalid meal transaction preserves memory and disk");
-                string legacyMeal = Path.Combine(root, "legacy-meal.json"); File.WriteAllText(legacyMeal, savedMeal.Replace("\"Version\":11", "\"Version\":9").Replace(",\"Meal\":\"午饭\"", ""));
+                string legacyMeal = Path.Combine(root, "legacy-meal.json"); File.WriteAllText(legacyMeal, savedMeal.Replace("\"Version\":12", "\"Version\":9").Replace(",\"Meal\":\"午饭\"", ""));
                 var legacyMealState = DataStore.ReadState(legacyMeal); Check(legacyMealState.Version == 9 && legacyMealState.Expenses[0].Meal == null && ExpenseSummary.Create(legacyMealState.Expenses, new DateTime(2024, 2, 1), DateTime.Today).ByMeal["其他"] == 18.6m, "v9 dining remains other without guessing");
             }
             var expenses = new TodoState();
@@ -75,6 +75,13 @@ class CoreTests
             Throws(() => expenses.SetExpenseBalance(.001m), "balance rejects fractions of cents");
             Throws(() => expenses.SetExpenseBalance(1000000000000m), "balance rejects out of range");
             Check(expenses.Copy().ExpenseBalance == 100m, "copy preserves balance baseline");
+            var incomeState = expenses.Copy();
+            var incomeRecord = new ExpenseRecord { Id = Guid.NewGuid().ToString("N"), Category = ExpenseRecord.IncomeCategory, Amount = 20m, Date = "2026-10-24" };
+            incomeState.Expenses.Add(incomeRecord); incomeState.Validate();
+            Check(incomeState.ExpenseBalance == 120m, "income credits balance");
+            Check(ExpenseSummary.Create(incomeState.Expenses, new DateTime(2026, 10, 1), DateTime.Today).Total == .3m, "income excluded from spending statistics");
+            incomeRecord.Amount = 15m; Check(incomeState.ExpenseBalance == 115m, "editing income adjusts balance");
+            incomeState.Expenses.Remove(incomeRecord); Check(incomeState.ExpenseBalance == 100m, "deleting income reverses credit");
             var expenseCopy = expenses.Copy(); expenseCopy.Expenses[0].Note = "副本";
             Check(expenses.Expenses[0].Note == "示例", "expense snapshots deep copied");
             foreach (decimal invalid in new[] { 0m, -1m, .001m, 100000000m }) { expenseCopy.Expenses[0].Amount = invalid; Throws(() => expenseCopy.Validate(), "invalid expense amount rejected " + invalid); }
@@ -100,7 +107,7 @@ class CoreTests
                 string expenseExport = Path.Combine(root, "expenses-export.json"); expenseStore.Export(expenseExport);
                 expenseStore.ChangeState(state => state.Expenses.Clear()); expenseStore.Import(expenseExport);
                 Check(expenseStore.State.ExpenseBalance == 100m, "export and import preserve balance");
-                Check(expenseStore.State.Expenses.Count == 2 && expenseStore.State.Version == 11, "expense backup import restores v10 records");
+                Check(expenseStore.State.Expenses.Count == 2 && expenseStore.State.Version == 12, "expense backup import restores records in current format");
                 using (var expenseMoved = expenseStore.MoveTo(Path.Combine(root, "expenses-moved"))) Check(expenseMoved.State.Expenses.Sum(e => e.Amount) == .3m, "data migration preserves expenses");
             }
             var credits = new TodoState();
@@ -144,7 +151,7 @@ class CoreTests
                 creditStore.Change(items => items.Add(Item("普通待办", null)));
                 string creditExport = Path.Combine(root, "credits-export.json"); creditStore.Export(creditExport);
                 var creditRestored = DataStore.ReadState(creditExport);
-                Check(creditRestored.Version == 11 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
+                Check(creditRestored.Version == 12 && creditRestored.Credits.Sum(c => c.Points) == 0.3m && creditRestored.Items.Count == 1, "todo saves and exports preserve credits");
                 creditStore.ChangeState(state => state.Credits.Clear()); creditStore.Import(creditExport);
                 Check(creditStore.State.Credits.Count == 2, "import replaces and restores credits");
                 Throws(() => creditStore.ChangeState(state => state.Credits[0].Points = -1), "invalid credit save fails atomically");
@@ -315,10 +322,10 @@ class CoreTests
                 timedStore.Import(timedPath);
                 string timedExport = Path.Combine(root, "时间地点备份.json"); timedStore.Export(timedExport);
                 var roundtrip = DataStore.ReadState(timedExport);
-                Check(roundtrip.Version == 11 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
+                Check(roundtrip.Version == 12 && roundtrip.Items[0].Time == "14:35" && roundtrip.Items[0].Location == "会议室 A", "time location backup roundtrip and new format");
                 JsonFile.Write(timedPath, legacyState);
                 timedStore.Import(timedPath);
-                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 11, "saving legacy data upgrades format without losing records");
+                Check(DataStore.ReadState(Path.Combine(timedStore.DirectoryPath, "tasks.json")).Version == 12, "saving legacy data upgrades format without losing records");
             }
             Check(Dates.GridStart(new DateTime(2026, 10, 1)) == new DateTime(2026, 9, 28), "October Monday-first grid");
             Check(Dates.GridStart(new DateTime(2027, 1, 1)) == new DateTime(2026, 12, 28), "calendar crosses year");
